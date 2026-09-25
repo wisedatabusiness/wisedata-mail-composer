@@ -8,6 +8,7 @@ use WiseData\Mail\Contracts\Transport;
 use WiseData\Mail\Exception\ApiException;
 use WiseData\Mail\Exception\TransportException;
 use WiseData\Mail\Http\CurlTransport;
+use WiseData\Mail\Http\HeaderGuard;
 use WiseData\Mail\Http\Response;
 use WiseData\Mail\Resource\Catalog;
 use WiseData\Mail\Resource\Contacts;
@@ -35,7 +36,7 @@ use WiseData\Mail\Resource\Emails;
  */
 final class Client
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.3.0';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 
@@ -102,6 +103,37 @@ final class Client
         );
     }
 
+    /**
+     * O que `dd()`, `dump()` e `var_dump()` mostram deste objeto.
+     *
+     * Sem isto o token sai por inteiro na tela de erro do Laravel, no `dd()` de
+     * quem está depurando e na captura que essa pessoa cola no chat do time. É
+     * o mesmo cuidado do `$hidden` de um model: o segredo não vaza por ataque,
+     * vaza por depuração.
+     *
+     * Sobra o `print_r()`, que ignora este método por decisão do PHP. Não há
+     * como cobri-lo sem abrir mão de propriedade privada; quem precisa inspecionar
+     * o cliente usa `dump()`.
+     *
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'token' => $this->mascarado(),
+            'baseUrl' => $this->baseUrl,
+            'space' => $this->space,
+            'retries' => $this->retries,
+            'transport' => $this->transport::class,
+        ];
+    }
+
+    /** O bastante para saber QUAL chave é, sem entregar a chave. */
+    private function mascarado(): string
+    {
+        return substr($this->token, 0, 8).'…'.substr($this->token, -4);
+    }
+
     public function contacts(): Contacts
     {
         return new Contacts($this);
@@ -157,8 +189,9 @@ final class Client
     private function comTentativas(string $method, string $url, ?array $body, array $headers = []): Response
     {
         $ultimaFalha = null;
+        $limite = $this->repetivel($method, $headers) ? $this->retries : 0;
 
-        for ($tentativa = 0; $tentativa <= $this->retries; $tentativa++) {
+        for ($tentativa = 0; $tentativa <= $limite; $tentativa++) {
             if ($tentativa > 0) {
                 /*
                  * Espera dobrando: 1s, 2s, 4s. Sem ela, "tentar de novo" contra
@@ -197,6 +230,39 @@ final class Client
     }
 
     /**
+     * Dá para tentar esta chamada de novo sem risco de acontecer duas vezes?
+     *
+     * `GET` e `DELETE` são seguros por definição, e o `PUT` de contato é um
+     * upsert — mandar duas vezes deixa a base no mesmo estado. Sobra o `POST`,
+     * e nele o perigo é concreto: um 5xx NÃO diz que o servidor não fez. Ele
+     * pode ter aceitado o envio e caído ao responder, e a tentativa seguinte
+     * manda o mesmo e-mail para a mesma pessoa.
+     *
+     * Com `Idempotency-Key` o risco some — a repetição devolve o registro
+     * anterior em vez de disparar de novo —, então aí a repetição volta a valer.
+     *
+     * A decisão é por método e cabeçalho, nunca por caminho: uma rota nova
+     * nasce protegida, em vez de entrar numa lista que ninguém lembra de
+     * atualizar.
+     *
+     * @param  array<string, string>  $headers
+     */
+    private function repetivel(string $method, array $headers): bool
+    {
+        if (strtoupper($method) !== 'POST') {
+            return true;
+        }
+
+        foreach ($headers as $nome => $valor) {
+            if (strtolower($nome) === 'idempotency-key' && trim($valor) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param  array<string, string>  $extras
      * @return array<string, string>
      */
@@ -223,8 +289,11 @@ final class Client
          * Os extras vêm por último e NÃO sobrescrevem os de cima: um
          * `Authorization` vindo daqui trocaria a credencial da chamada sem que
          * nada no código do chamador sugerisse isso.
+         *
+         * A conferência é aqui, e não só no `CurlTransport`, para valer também
+         * para quem injeta o próprio transporte — ver `HeaderGuard`.
          */
-        return [...$extras, ...$cabecalhos];
+        return HeaderGuard::validated([...$extras, ...$cabecalhos]);
     }
 
     /**

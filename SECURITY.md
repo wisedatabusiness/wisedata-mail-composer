@@ -37,6 +37,21 @@ execução de código a partir de uma resposta da API.
 - Redirecionamento não é seguido: um `301` levaria o `Authorization` junto para
   onde quer que ele aponte.
 - Cabeçalho passado por quem chama não sobrescreve `Authorization`.
+- Nome e valor de cabeçalho são conferidos antes de virar linha: um `\r\n` num
+  valor escreveria um cabeçalho novo, e o `X-WiseData-Space` forjado assim
+  decidiria em qual espaço de envio a escrita cai. Recusamos, nunca limpamos —
+  uma chave de idempotência mutilada deixa de proteger contra envio duplicado.
+- Um `POST` sem `Idempotency-Key` não é repetido: um 5xx não diz que o servidor
+  não fez, e a repetição mandaria o mesmo e-mail de novo.
+- `dump()` e a tela de erro do Laravel mostram o token mascarado.
+
+## Duas coisas que o pacote NÃO consegue impedir
+
+- **`print_r()` e `var_export()` mostram o token por inteiro.** O PHP não deixa
+  esses dois consultarem o `__debugInfo()`. Use `dump()`.
+- **Serializar o cliente grava o token em claro.** Um job de fila que guarde o
+  `Client` numa propriedade o escreve na tabela `jobs` ou no Redis. Resolva-o do
+  contêiner dentro do `handle()`, em vez de carregá-lo no job.
 
 ## O token
 

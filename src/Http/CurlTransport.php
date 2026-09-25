@@ -93,7 +93,12 @@ final class CurlTransport implements Transport
     {
         $linhas = [];
 
-        foreach ($headers as $nome => $valor) {
+        /*
+         * Confere de novo, mesmo o `Client` já tendo conferido: aqui é a última
+         * linha antes do fio, e o libcurl aceita qualquer coisa que chegue
+         * nesta lista. Ver `HeaderGuard` para o que a injeção faz.
+         */
+        foreach (HeaderGuard::validated($headers) as $nome => $valor) {
             $linhas[] = "{$nome}: {$valor}";
         }
 
