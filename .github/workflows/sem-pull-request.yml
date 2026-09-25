@@ -1,0 +1,50 @@
+# O GitHub NÃO tem interruptor para desligar pull request num repositório
+# público: qualquer pessoa pode bifurcar e abrir um. Este fluxo é a única forma
+# de fazer valer a política do CONTRIBUTING — responde explicando por onde a
+# contribuição entra e fecha, em vez de deixar a pessoa esperando análise que
+# não vem.
+name: Sem pull request
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  fechar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const corpo = [
+              'Obrigado pelo interesse — e desculpe pelo automático.',
+              '',
+              'Este repositório é o espelho público de um pacote mantido internamente,',
+              'e o desenvolvimento acontece do outro lado. Não há como integrar um pull',
+              'request pelo caminho que a manutenção usa, então eles são fechados sem',
+              'análise.',
+              '',
+              '**Abra uma [issue](https://github.com/wisedatabusiness/wisedata-mail-composer/issues/new)**',
+              'descrevendo o problema. O trecho de código é bem-vindo dentro dela — é a',
+              'forma de contribuir com a correção aqui.',
+              '',
+              'Falha de segurança não vai em issue: veja o [SECURITY.md](https://github.com/wisedatabusiness/wisedata-mail-composer/blob/main/SECURITY.md).',
+            ].join('\n')
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: corpo,
+            })
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              state: 'closed',
+            })
