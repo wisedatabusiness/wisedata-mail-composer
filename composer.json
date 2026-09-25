@@ -1,0 +1,56 @@
+{
+    "name": "wisedata/mail-php",
+    "description": "Cliente PHP da API do WiseData Mail: contatos e envio de e-mail.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["wisedata", "email", "transactional", "contacts", "laravel"],
+    "homepage": "https://wisedatamail.com",
+    "authors": [
+        {
+            "name": "WiseData",
+            "homepage": "https://wisedatamail.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/wisedatabusiness/wisedata-mail-composer/issues",
+        "source": "https://github.com/wisedatabusiness/wisedata-mail-composer",
+        "docs": "https://github.com/wisedatabusiness/wisedata-mail-composer#readme"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12.5.8",
+        "symfony/mailer": "^6.4|^7.0"
+    },
+    "suggest": {
+        "symfony/mailer": "Necessário apenas para o transport de e-mail (MAIL_MAILER=wisedatamail). Toda aplicação Laravel já o tem."
+    },
+    "conflict": {
+        "symfony/mailer": "<6.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "WiseData\\Mail\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WiseData\\Mail\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "WiseData\\Mail\\Laravel\\WiseDataMailServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

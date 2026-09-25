@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Fora do zip que o Composer baixa: quem instala o pacote não roda a suíte dele,
+# e cada arquivo aqui é peso em todo `composer install` de todo produto.
+/.github         export-ignore
+/tests           export-ignore
+/.gitattributes  export-ignore
+/.gitignore      export-ignore
+/phpunit.xml     export-ignore
+/CONTRIBUTING.md export-ignore
