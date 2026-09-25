@@ -10,7 +10,7 @@ versão nova de patch; não há backport para linhas anteriores.
 **Não abra issue pública** para falha de segurança — a issue fica visível para
 todo mundo enquanto a correção não existe.
 
-Escreva para **seguranca@wisedatamail.com** com o que você encontrou, como
+Escreva para **security@wisedatabusiness.com** com o que você encontrou, como
 reproduzir e o impacto que enxerga. Respondemos o recebimento em até dois dias
 úteis e damos notícia do andamento a cada semana até fechar.
 

@@ -294,7 +294,7 @@ duas não se multiplicarem.
 O caminho de volta não passa por este pacote: quem entrega é o Mail, num `POST`
 para o endereço que você cadastra em *Configurações → Webhooks*. O contrato
 completo — todos os tipos de evento e um exemplo de corpo para cada um — está na
-documentação da API, em <https://wisedatamail.com/docs/api>; o que importa aqui é
+documentação da API, na central de ajuda do WiseData Mail; o que importa aqui é
 conferir a assinatura antes de confiar no corpo.
 
 ```php
