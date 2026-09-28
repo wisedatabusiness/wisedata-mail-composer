@@ -4,11 +4,11 @@
     "type": "library",
     "license": "MIT",
     "keywords": ["wisedata", "email", "transactional", "contacts", "laravel"],
-    "homepage": "https://wisedatamail.com",
+    "homepage": "https://www.wisedatabusiness.com/pt-br",
     "authors": [
         {
-            "name": "WiseData",
-            "homepage": "https://wisedatamail.com"
+            "name": "WiseData Business",
+            "homepage": "https://www.wisedatabusiness.com/pt-br"
         }
     ],
     "support": {
