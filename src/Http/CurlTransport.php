@@ -18,6 +18,15 @@ final class CurlTransport implements Transport
     public function __construct(
         private readonly int $timeout = 15,
         private readonly int $connectTimeout = 5,
+
+        /*
+         * O tempo limite é TOTAL, upload incluído — e 15s fixos estouram sempre
+         * num anexo de 10 MB numa saída de 5 Mbps. Um valor fixo maior
+         * penalizaria a chamada comum, que é a esmagadora maioria; por isso o
+         * orçamento cresce com o tamanho do corpo, de forma determinística e sem
+         * tentar adivinhar a rede.
+         */
+        private readonly int $uploadSecondsPerMegabyte = 10,
     ) {}
 
     /**
@@ -68,6 +77,8 @@ final class CurlTransport implements Transport
             }
 
             $opcoes[CURLOPT_POSTFIELDS] = $json;
+            $opcoes[CURLOPT_TIMEOUT] = $this->timeout
+                + (int) ceil(strlen($json) / 1_048_576) * $this->uploadSecondsPerMegabyte;
         }
 
         curl_setopt_array($curl, $opcoes);

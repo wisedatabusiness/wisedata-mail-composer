@@ -68,7 +68,6 @@ final class WiseDataMailTransport extends AbstractTransport
     {
         $email = $this->email($message);
 
-        $this->recusarAnexo($email);
         $this->recusarVariosDestinatarios($email);
 
         $payload = array_filter([
@@ -81,6 +80,13 @@ final class WiseDataMailTransport extends AbstractTransport
             'reply_to' => $this->primeiroEndereco($email->getReplyTo()),
             'message_type' => $this->tipo($email),
             'headers' => $this->cabecalhosExtras($email),
+
+            /*
+             * Convertido ANTES da rede: o `AttachmentConverter` recusa o que não
+             * pode sair, e uma mensagem com dez megabytes que o servidor
+             * rejeitaria não tem por que subir.
+             */
+            'attachments' => AttachmentConverter::fromEmail($email),
         ], static fn (mixed $valor): bool => $valor !== null && $valor !== '' && $valor !== []);
 
         $dados = $this->enviar($payload);
@@ -121,32 +127,6 @@ final class WiseDataMailTransport extends AbstractTransport
                 previous: $e,
             );
         }
-    }
-
-    /**
-     * Recusa alto, antes de qualquer chamada de rede.
-     *
-     * Entregar a mensagem sem o anexo seria pior do que falhar: o aviso de nota
-     * fiscal chegaria sem a nota, o boleto sem o boleto, e ninguém perceberia até
-     * o cliente reclamar. `getAttachments()` inclui as partes embutidas por
-     * `embed()` — o logotipo no cabeçalho é o caso mais comum —, e recusar é o
-     * certo também para elas: o HTML referencia `cid:...` e, sem a parte, a
-     * imagem vira ícone quebrado em todo cliente de e-mail.
-     */
-    private function recusarAnexo(Email $email): void
-    {
-        $anexos = $email->getAttachments();
-
-        if ($anexos === []) {
-            return;
-        }
-
-        throw new WiseDataMailTransportException(sprintf(
-            'O WiseData Mail ainda não envia anexo, e esta mensagem tem %d. NADA foi enviado — entregar '
-            .'o e-mail sem o anexo esconderia o problema até o destinatário reclamar. Publique o arquivo '
-            .'e mande o link, ou use outro mailer para esta mensagem.',
-            count($anexos),
-        ));
     }
 
     /**

@@ -111,6 +111,45 @@ suprimida na conta. Nada é cobrado da cota.
 **Um destinatário por mensagem.** Transacional é de uma pessoa — o recibo é dela,
 o código é dela. Para falar com um grupo existe a campanha.
 
+### Anexo pela API crua
+
+```php
+$mail->emails()->send([
+    'to' => 'ana@exemplo.com',
+    'subject' => 'Seu relatório de setembro',
+    'html' => '<p>Segue em anexo.</p>',
+    'attachments' => [[
+        'filename' => 'relatorio-setembro.pdf',
+        'content' => base64_encode(file_get_contents($caminho)),
+        'content_type' => 'application/pdf',
+    ]],
+]);
+```
+
+`filename` e `content` (em base64) são obrigatórios; `content_type` é opcional —
+sem ele o tipo é deduzido da extensão, então informe-o quando o nome não tiver
+uma.
+
+Para imagem embutida, `disposition` e `content_id`, e o HTML referencia por
+`cid:`:
+
+```php
+'attachments' => [[
+    'filename' => 'logo.png',
+    'content' => base64_encode($png),
+    'content_type' => 'image/png',
+    'disposition' => 'inline',
+    'content_id' => 'logo123',
+]],
+// no HTML: <img src="cid:logo123">
+```
+
+Dez megabytes somando tudo, dez arquivos. Extensão de executável ou script é
+recusada com `422` nomeando o arquivo — a lista é do provedor de envio.
+
+**Anexo combina com `template`**, ao contrário de `subject`/`html`/`text`: o
+modelo guarda o texto, a chamada manda o arquivo.
+
 ### Modelo salvo no Mail
 
 O texto pode viver no painel em vez de no seu código, endereçado por uma chave:
@@ -183,19 +222,34 @@ Um segundo mailer, para outro espaço ou outro tipo, aí sim vai no
 ],
 ```
 
-### Anexo ainda não
+### Anexo
 
-Mensagem com anexo é **recusada**, e nada é enviado:
+Funciona como em qualquer mailer do Laravel — nada a configurar:
 
-> O WiseData Mail ainda não envia anexo, e esta mensagem tem 1. NADA foi enviado
-> — entregar o e-mail sem o anexo esconderia o problema até o destinatário
-> reclamar. Publique o arquivo e mande o link, ou use outro mailer para esta
-> mensagem.
+```php
+Mail::to($cliente)->send(new RelatorioMensal($pdf));
 
-Vale também para imagem embutida com `embed()`: sem a parte, o HTML aponta para
-um `cid:` que não existe e a imagem vira ícone quebrado.
+// dentro do Mailable
+public function attachments(): array
+{
+    return [Attachment::fromPath($caminho)->as('relatorio-setembro.pdf')];
+}
+```
 
-O mesmo acontece com vários destinatários ou cópia — um envio por pessoa.
+`embed()` também: a imagem vira anexo embutido e o `cid:` do HTML aponta para
+ela, que é o logotipo no cabeçalho.
+
+**Dez megabytes somando tudo, dez arquivos por mensagem.** O pacote recusa antes
+de subir, para você não gastar a rede num 422 previsível.
+
+**Nome de arquivo é obrigatório.** O Symfony aceita parte sem nome; nós não.
+Inventar `anexo-1.bin` entregaria ao destinatário um nome que ninguém escolheu.
+
+**Quem decide quais extensões passam é o servidor**, não o pacote — a lista é do
+provedor de envio e muda sem aviso. Executável e script são recusados com `422`
+dizendo qual arquivo.
+
+Vários destinatários ou cópia continuam recusados: um envio por pessoa.
 
 ### Tipo da mensagem
 
@@ -288,6 +342,28 @@ devolve o mesmo erro e gasta o limite da chave.
 
 Dentro de um job que já tem repetição própria, desligue com `retries: 0` para as
 duas não se multiplicarem.
+
+## Homologação
+
+Não há nada a configurar neste pacote: quem decide é a **chave**.
+
+Em *Configurações → Integrações*, marque **"Chave de homologação"** ao criar. O
+mesmo código que roda em produção, apontado para essa chave, tem a chamada
+aceita por inteiro — mas **nenhum e-mail sai**, **nenhuma cota é consumida** e a
+mensagem aparece em *Configurações → Caixa de teste*, onde dá para ler o
+conteúdo montado, conferir os anexos e simular os desfechos.
+
+```dotenv
+# .env do ambiente de homologação — só a chave muda
+WISEDATA_MAIL_TOKEN=wdm_hml_...
+```
+
+A marca está na chave, e não num parâmetro de `enviar()`, exatamente para que
+uma homologação **não consiga** alcançar um cliente real por esquecimento.
+
+Simular um desfecho na caixa dispara o webhook de verdade, com a mesma
+assinatura — é assim que se testa o receptor sem esperar uma devolução real
+acontecer.
 
 ## Recebendo os eventos (webhook)
 

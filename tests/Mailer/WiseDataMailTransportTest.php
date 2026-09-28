@@ -61,26 +61,86 @@ final class WiseDataMailTransportTest extends TestCase
     }
 
     /**
-     * Anexo recusa, e NADA é enviado.
+     * O anexo chega à rede com o conteúdo em base64 e o nome preservado.
      *
-     * A ordem importa tanto quanto a recusa: a verificação vem antes de qualquer
-     * chamada. Entregar o aviso de nota fiscal sem a nota esconderia o problema
-     * até o cliente reclamar.
+     * É a camada onde um campo some entre o `Mailable` e a requisição: sem a
+     * asserção sobre o corpo EXATO, uma chave renomeada no payload passa em tudo
+     * e o anexo simplesmente não sai.
      */
-    public function test_anexo_recusa_antes_de_qualquer_chamada(): void
+    public function test_anexo_vira_o_item_esperado_no_corpo(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http)->send(
+            $this->email()->attach('conteudo-do-pdf', 'nota.pdf', 'application/pdf')
+        );
+
+        $anexos = $http->ultima()['body']['attachments'] ?? [];
+
+        $this->assertCount(1, $anexos);
+        $this->assertSame('nota.pdf', $anexos[0]['filename']);
+        $this->assertSame(base64_encode('conteudo-do-pdf'), $anexos[0]['content']);
+        $this->assertSame('application/pdf', $anexos[0]['content_type']);
+        $this->assertSame('attachment', $anexos[0]['disposition']);
+
+        /*
+         * `getContentId()` GERA um id quando não há. Lido fora do ramo embutido,
+         * todo anexo comum ganharia `content_id` — e o inline deixaria de se
+         * distinguir do resto.
+         */
+        $this->assertArrayNotHasKey('content_id', $anexos[0]);
+    }
+
+    /**
+     * `embed()` vira inline com o `cid:` que o HTML referencia.
+     *
+     * É o logotipo no cabeçalho — o caso mais comum numa aplicação Laravel, e
+     * justamente o que a versão anterior do pacote recusava.
+     */
+    public function test_imagem_embutida_vira_inline_com_content_id(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $email = $this->email();
+        $email->embed('bytes-do-png', 'logo.png', 'image/png');
+
+        $this->transport($http)->send($email);
+
+        $anexo = ($http->ultima()['body']['attachments'] ?? [])[0] ?? [];
+
+        $this->assertSame('inline', $anexo['disposition'] ?? null);
+        $this->assertNotEmpty($anexo['content_id'] ?? null);
+    }
+
+    /**
+     * Anexo sem nome recusa, e NADA é enviado.
+     *
+     * O Symfony permite parte sem nome; a nossa API exige um. Inventar
+     * `anexo-1.bin` entregaria ao destinatário um nome que ninguém escolheu, sem
+     * nenhum indício de que foi inventado.
+     */
+    public function test_anexo_sem_nome_recusa_antes_de_qualquer_chamada(): void
     {
         $http = new FakeTransport;
 
-        $email = $this->email()->attach('conteudo', 'nota.pdf', 'application/pdf');
-
         try {
-            $this->transport($http)->send($email);
-            $this->fail('o anexo precisa ser recusado');
+            $this->transport($http)->send($this->email()->attach('conteudo'));
+            $this->fail('o anexo sem nome precisa ser recusado');
         } catch (WiseDataMailTransportException $e) {
             $this->assertStringContainsString('NADA foi enviado', $e->getMessage());
         }
 
         $this->assertSame([], $http->chamadas, 'nenhuma requisição podia ter saído');
+    }
+
+    /** Sem anexo, a chave não viaja vazia. */
+    public function test_mensagem_sem_anexo_nao_leva_a_chave(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http)->send($this->email());
+
+        $this->assertArrayNotHasKey('attachments', $http->ultima()['body']);
     }
 
     /** Cópia também recusa: uma mensagem transacional é de uma pessoa. */
