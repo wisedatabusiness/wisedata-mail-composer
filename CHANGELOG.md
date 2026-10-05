@@ -1,0 +1,64 @@
+# Changelog
+
+Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
+[SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
+`Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
+
+## [1.1.0] - 2026-10-05
+
+### Adicionado
+
+- **Fake oficial para testes no Laravel**: `WiseDataMail::fake()` troca só a
+  fronteira HTTP e devolve um `WiseDataMailFake` com `assertSent`,
+  `assertSentTo`, `assertNotSentTo`, `assertSentCount`, `assertNothingSent` e
+  `failWith()` para simular uma recusa da API.
+- **Ponto de injeção do transporte HTTP**: o provider resolve
+  `WiseData\Mail\Contracts\Transport` pelo contêiner, tanto para o `Client`
+  quanto para o mailer. Um `bind` da aplicação troca o cURL.
+- **Comando `php artisan wisedata-mail:test {email} {--mailer=}`**: envia na
+  hora pelo mailer e mostra o id aceito, ou o código do erro da API.
+- **Receptor de webhook para Laravel**: rota opcional
+  (`WISEDATA_MAIL_WEBHOOK_PATH`), middleware `VerifyWebhookSignature` (assinatura
+  e janela de cinco minutos), deduplicação por `X-WiseData-Delivery` e um evento
+  Laravel por tipo (`WiseDataMailDelivered`, `WiseDataMailBounced`, ...).
+- `WebhookSignature`, `WebhookPayload` e `WebhookEvent`, para conferir e ler o
+  webhook fora do Laravel.
+- Config `webhook.*` com o segredo em `WISEDATA_MAIL_WEBHOOK_SECRET`.
+- `WISEDATA_MAIL_USE_ACCOUNT_SENDER` (ou `use_account_sender` no mailer): não
+  manda o `from` e deixa a API usar o remetente padrão da conta.
+- Suporte declarado e testado a `symfony/mailer` 8.x; CI com Symfony 6.4 (sem
+  Laravel), 7.x (Laravel 12) e 8.x (Laravel 13).
+
+### Alterado
+
+- Erro de validação da API (422 com `errors` e sem `error`) chega como
+  `ApiException::VALIDACAO` (`validation_failed`), com os campos em
+  `$e->extra['errors']`. Antes vinha `unknown_error`, código que nunca foi
+  documentado.
+- O comportamento do remetente **não** mudou: o `from` continua indo, e o
+  `use_account_sender` é opcional. Por isso esta versão é minor.
+
+### Corrigido
+
+- O `User-Agent` dizia `wisedata-mail-php/0.3.0` desde a 1.0.0.
+- O README dizia que o remetente era sempre o verificado da conta, mas o mailer
+  manda o `from` da mensagem (`MAIL_FROM_ADDRESS`), e a API o usa — recusando
+  com 422 quando ele não é um remetente verificado. O README agora descreve o
+  comportamento real.
+- O README do webhook não listava os eventos, os campos nem a política de
+  reenvio.
+
+## [1.0.1] - 2026-09-28
+
+### Alterado
+
+- `homepage` e autoria do `composer.json` apontam para a WiseData Business.
+
+## [1.0.0] - 2026-09-28
+
+Primeira versão estável: contatos, catálogo, envio transacional com anexo e
+modelo salvo, e o mailer `wisedatamail` para Laravel.
+
+## [0.3.0] - 2026-09-25
+
+Versão de pré-lançamento.

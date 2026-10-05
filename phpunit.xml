@@ -6,8 +6,13 @@
          failOnWarning="true"
          failOnRisky="true">
     <testsuites>
-        <testsuite name="WiseData Mail">
+        <!-- Separadas para o CI rodar `core` sem Laravel instalado (Symfony 6.4). -->
+        <testsuite name="core">
             <directory>tests</directory>
+            <exclude>tests/Laravel</exclude>
+        </testsuite>
+        <testsuite name="laravel">
+            <directory>tests/Laravel</directory>
         </testsuite>
     </testsuites>
     <source>

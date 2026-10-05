@@ -274,11 +274,40 @@ final class WiseDataMailTransportTest extends TestCase
         }
     }
 
+    /**
+     * O remetente, como a API decide (`SendEmailRequest` + `SenderResolver`):
+     * `from` presente precisa ser remetente verificado; ausente, sai o padrão
+     * da conta. O nome exibido nunca viaja — é o do cadastro do remetente.
+     */
+    public function test_o_from_da_mensagem_vai_so_com_o_endereco(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http)->send($this->email());
+
+        $corpo = $http->ultima()['body'];
+
+        $this->assertSame('sistema@exemplo.com', $corpo['from'] ?? null);
+        $this->assertArrayNotHasKey('from_name', $corpo);
+    }
+
+    public function test_com_o_remetente_da_conta_o_from_nao_vai(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http, useAccountSender: true)->send($this->email());
+
+        $this->assertArrayNotHasKey('from', $http->ultima()['body']);
+    }
+
     /* ------------------------------------------------------------------ */
 
-    private function transport(FakeTransport $http): WiseDataMailTransport
+    private function transport(FakeTransport $http, bool $useAccountSender = false): WiseDataMailTransport
     {
-        return new WiseDataMailTransport(new Client('wdm_abc_def', transport: $http, retries: 0));
+        return new WiseDataMailTransport(
+            new Client('wdm_abc_def', transport: $http, retries: 0),
+            useAccountSender: $useAccountSender,
+        );
     }
 
     private function email(): Email

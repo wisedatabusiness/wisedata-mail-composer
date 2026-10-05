@@ -207,9 +207,34 @@ WISEDATA_MAIL_TOKEN=wdm_abc_def
 mailer sozinho. Todo `Mailable`, toda `Notification` e todo `Mail::to()` que já
 existem passam a sair pelo WiseData Mail sem uma linha alterada.
 
-O remetente é o **remetente verificado** da conta no WiseData Mail, não o
-`MAIL_FROM_ADDRESS` da aplicação: um endereço não verificado sai sem DKIM
-alinhado, e o provedor de quem recebe trata isso como falsificação.
+### O remetente
+
+O mailer manda o endereço do `from` da mensagem — no Laravel, o
+`MAIL_FROM_ADDRESS`, ou o `from()` do `Mailable` — e a API o usa. **Ele precisa
+ser um remetente verificado** da conta no WiseData Mail (*Configurações →
+Remetentes*); se não for, a API recusa com `422` e nada sai. Um endereço não
+verificado sairia sem DKIM alinhado, e o provedor de quem recebe trataria como
+falsificação.
+
+O **nome** exibido não viaja: é o do cadastro do remetente no WiseData Mail.
+
+Duas saídas quando o `MAIL_FROM_ADDRESS` da aplicação não é (ou não pode ser)
+um remetente verificado:
+
+```dotenv
+# 1. Deixar a conta decidir: o `from` não vai e sai o remetente padrão da conta.
+WISEDATA_MAIL_USE_ACCOUNT_SENDER=true
+```
+
+```php
+// 2. Um remetente só para este mailer, em config/mail.php (recurso do Laravel).
+'wisedatamail' => [
+    'transport' => 'wisedatamail',
+    'from' => ['address' => 'avisos@seudominio.com', 'name' => 'Seu Produto'],
+],
+```
+
+`use_account_sender` também vale por mailer, no `config/mail.php`.
 
 Um segundo mailer, para outro espaço ou outro tipo, aí sim vai no
 `config/mail.php`:
@@ -275,6 +300,62 @@ mandar duas vezes — o servidor pode ter aceitado e caído ao responder. Quem
 repete é a fila do Laravel, com o backoff dela. Aumentar esse número põe duas
 camadas tentando a mesma coisa.
 
+### Conferir o envio depois do deploy
+
+```bash
+php artisan wisedata-mail:test voce@exemplo.com
+php artisan wisedata-mail:test voce@exemplo.com --mailer=wisedatamail_marketing
+```
+
+Envia **na hora** (sem fila) pelo mesmo caminho de um `Mailable` — token,
+espaço, remetente — e mostra:
+
+```text
+Remetente: avisos@seudominio.com (precisa ser um remetente verificado no WiseData Mail)
+Enviando para voce@exemplo.com pelo mailer [wisedatamail]...
+Aceito pelo WiseData Mail.
+Id da mensagem: 8821
+```
+
+ou o código do erro da API (`invalid_api_key`, `validation_failed` com o campo
+recusado, ...), com saída `1`. Funciona mesmo com outro mailer como padrão: o
+`MAIL_MAILER` não precisa ser `wisedatamail`.
+
+### Testes da aplicação
+
+```php
+use WiseData\Mail\Laravel\Facades\WiseDataMail;
+
+public function test_o_recibo_sai_pelo_wisedata_mail(): void
+{
+    $mail = WiseDataMail::fake();
+
+    $this->post('/pedidos/1234/pagar');
+
+    $mail->assertSentTo('ana@exemplo.com', fn (array $corpo) => $corpo['subject'] === 'Seu recibo');
+    $mail->assertSentCount(1);
+}
+```
+
+`WiseDataMail::fake()` troca só a **fronteira HTTP**: o mailer `wisedatamail` e o
+`Client` do contêiner continuam os reais, então o teste prova o corpo que sairia
+para a API — `to`, `subject`, `html`, `text`, `from`, `attachments`, `headers`.
+Cada envio é aceito com um `id` sequencial (`1`, `2`, ...). Vale também para o
+mailer que já tinha sido resolvido antes do `fake()`, e não exige token.
+
+| Método | |
+|---|---|
+| `assertSent(?callable)` | houve envio (que satisfaz o filtro) |
+| `assertSentTo($email, ?callable)` / `assertNotSentTo($email)` | por destinatário |
+| `assertSentCount($n)` / `assertNothingSent()` | contagem |
+| `failWith($error, $status = 422)` | as chamadas seguintes são recusadas como a API recusaria |
+| `sent(?callable)` / `requests()` | os corpos aceitos / todas as chamadas, inclusive de contato |
+
+`Mail::fake()` do Laravel continua servindo para afirmar **qual `Mailable`** foi
+enviado; o `WiseDataMail::fake()` serve para afirmar **o que chega à API**.
+
+O mesmo `WiseDataMail` é a facade do `Client`: `WiseDataMail::contacts()->upsert([...])`.
+
 ### Fora do Laravel
 
 ```bash
@@ -329,6 +410,7 @@ Os principais:
 | `unknown_variable` | o modelo não usa a variável; os aceitos vêm em `extra['accepted_variables']` |
 | `missing_variable` | o modelo usa `extra['variable']` e ela não foi enviada |
 | `rate_limited` | passou do limite de requisições; esperar e repetir |
+| `validation_failed` | o corpo foi recusado na validação (422); os campos e as mensagens estão em `extra['errors']`. O caso mais comum é `from` que não é remetente verificado. Este código é dado **pelo pacote**: a API responde a validação no formato do Laravel, sem `error` |
 
 No mailer, tudo isso chega como `WiseDataMailTransportException`, que é uma
 `TransportException` do Symfony — o job falha e vai para `failed_jobs` como
@@ -367,58 +449,250 @@ acontecer.
 
 ## Recebendo os eventos (webhook)
 
-O caminho de volta não passa por este pacote: quem entrega é o Mail, num `POST`
-para o endereço que você cadastra em *Configurações → Webhooks*. O contrato
-completo — todos os tipos de evento e um exemplo de corpo para cada um — está na
-documentação da API, na central de ajuda do WiseData Mail; o que importa aqui é
-conferir a assinatura antes de confiar no corpo.
+O caminho de volta: o WiseData Mail faz um `POST` no endereço cadastrado em
+*Configurações → Webhooks* (o cadastro é só no painel; a API não tem rota para
+isso). Na criação, a tela mostra **uma vez** o segredo de assinatura.
+
+### No Laravel, pronto
+
+```dotenv
+WISEDATA_MAIL_WEBHOOK_SECRET=o-segredo-exibido-na-criacao
+WISEDATA_MAIL_WEBHOOK_PATH=webhooks/wisedata-mail
+```
+
+Com o `PATH` preenchido o pacote registra `POST /webhooks/wisedata-mail` (nome
+`wisedata-mail.webhook`), **fora** dos grupos `web` e `api` — sem CSRF, sessão
+nem `throttle`. Vazio, nenhuma rota é aberta. Cadastre no painel a URL completa
+(`https://seuapp.com/webhooks/wisedata-mail`).
+
+O receptor:
+
+1. confere a assinatura e a janela de cinco minutos — `401` se não bater, `500`
+   se o segredo não estiver configurado (a API reenvia, e o lote é processado
+   quando o segredo for preenchido);
+2. responde `204` ao ping do botão *Testar*, sem disparar nada;
+3. **deduplica pelo `X-WiseData-Delivery`**, num `Cache::add` atômico guardado
+   por um dia — a API reenvia um lote por até doze horas;
+4. descarta eventos simulados na caixa de homologação (`is_test`), que chegam ao
+   mesmo endereço dos reais — ligue `WISEDATA_MAIL_WEBHOOK_ACCEPT_TEST_EVENTS=true`
+   só no ambiente de homologação;
+5. dispara um evento Laravel por item e responde `204`.
+
+A aplicação só escuta:
 
 ```php
+use WiseData\Mail\Laravel\Events\WiseDataMailBounced;
+
+final class SuprimirEnderecoDevolvido implements ShouldQueue
+{
+    public function handle(WiseDataMailBounced $e): void
+    {
+        $e->event->email;                 // quem
+        $e->event->messageId;             // o id devolvido no envio
+        $e->event->bounceClassification;  // 'invalid_address', 'mailbox_full', ...
+    }
+}
+```
+
+| `type` | Evento Laravel |
+|---|---|
+| `delivered` | `WiseDataMailDelivered` |
+| `bounce` | `WiseDataMailBounced` |
+| `dropped` | `WiseDataMailDropped` |
+| `suppressed` | `WiseDataMailSuppressed` |
+| `rendering_failure` | `WiseDataMailRenderingFailed` |
+| `spamreport` | `WiseDataMailSpamReported` |
+| `open` | `WiseDataMailOpened` |
+| `click` | `WiseDataMailClicked` |
+| `unsubscribe` | `WiseDataMailUnsubscribed` |
+| `resubscribe` | `WiseDataMailResubscribed` |
+| qualquer outro | `WiseDataMailUnknownEvent` — um tipo novo da API não some |
+
+Todos ficam em `WiseData\Mail\Laravel\Events` e carregam `$event` (um
+`WiseData\Mail\Webhook\WebhookEvent`) e `$deliveryId`.
+
+- **Listener demorado implementa `ShouldQueue`.** A API espera o `2xx` por dez
+  segundos; passar disso conta como falha e o lote volta.
+- **Listener idempotente por `$e->event->id`.** Se um listener lançar exceção,
+  o receptor libera o lote e devolve erro, a API reenvia, e os eventos que já
+  tinham sido tratados chegam de novo.
+- **Correlacionar com o envio:** o `id` que o mailer põe em
+  `SentMessage::getMessageId()` é o `message_id` dos eventos. Guarde-o ao lado do
+  seu registro.
+
+Prefere a rota no seu arquivo de rotas? Deixe o `PATH` vazio e:
+
+```php
+use WiseData\Mail\Laravel\Webhook\VerifyWebhookSignature;
+use WiseData\Mail\Laravel\Webhook\WebhookController;
+
+Route::post('/webhooks/wisedata-mail', WebhookController::class)
+    ->middleware(VerifyWebhookSignature::class)
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+```
+
+| Variável | Padrão | |
+|---|---|---|
+| `WISEDATA_MAIL_WEBHOOK_SECRET` | — | o segredo de assinatura; sem ele tudo é recusado |
+| `WISEDATA_MAIL_WEBHOOK_PATH` | vazio | liga a rota pronta |
+| `WISEDATA_MAIL_WEBHOOK_TOLERANCE` | `300` | janela, em segundos |
+| `WISEDATA_MAIL_WEBHOOK_DEDUPE_TTL` | `86400` | por quanto tempo um `X-WiseData-Delivery` é lembrado |
+| `WISEDATA_MAIL_WEBHOOK_CACHE_STORE` | cache padrão | com várias instâncias, um cache compartilhado (Redis, banco) |
+| `WISEDATA_MAIL_WEBHOOK_ACCEPT_TEST_EVENTS` | `false` | aceita os eventos simulados na homologação |
+
+### O contrato
+
+A fonte é a documentação da API do WiseData Mail; o resumo:
+
+**Cabeçalhos**
+
+| Cabeçalho | |
+|---|---|
+| `X-WiseData-Signature` | `sha256=` + HMAC-SHA256 hexadecimal de `timestamp + "." + corpo cru`, com o segredo |
+| `X-WiseData-Timestamp` | horário Unix, em segundos, que entra no material assinado |
+| `X-WiseData-Delivery` | id do lote, **igual em todo reenvio**; `0` no ping de teste |
+| `X-WiseData-Event-Count` | quantos eventos vêm no corpo |
+
+**Corpo:** até cem eventos por `POST`.
+
+```json
+{
+  "events": [
+    {
+      "id": 8821,
+      "type": "delivered",
+      "occurred_at": "2026-09-25T14:03:11+00:00",
+      "email": "ana@exemplo.com",
+      "message_id": 991,
+      "campaign_id": null,
+      "message_type": "transactional",
+      "url": null,
+      "reason": null,
+      "bounce_classification": null,
+      "machine_open": false,
+      "is_test": false,
+      "space": null
+    }
+  ],
+  "sent_at": "2026-09-25T14:03:21+00:00"
+}
+```
+
+O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
+
+**Todo evento traz todos os campos**, com `null` nos que não se aplicam:
+
+| Campo | Quando tem valor |
+|---|---|
+| `id` | sempre; cresce, serve para deduplicar e perceber buraco |
+| `type` | sempre — ver a tabela abaixo |
+| `occurred_at` | sempre; ISO 8601 com fuso |
+| `email` | sempre |
+| `message_id` | sempre; o `id` devolvido no envio |
+| `campaign_id` | na campanha; `null` no transacional |
+| `message_type` | `marketing` ou `transactional` |
+| `url` | só em `click` |
+| `reason` | em `bounce`, `suppressed`, `dropped`, `rendering_failure` e `spamreport` |
+| `bounce_classification` | em `bounce`, `suppressed`, `dropped` e `rendering_failure` |
+| `machine_open` | em `open` e `click`: `true` quando foi máquina (pré-carregamento, antivírus, verificador de links); `false` nos demais |
+| `space` | slug do espaço de envio; `null` na conta principal |
+| `is_test` | `true` quando o desfecho foi simulado na caixa de homologação |
+
+| `type` | O que aconteceu | Campos próprios |
+|---|---|---|
+| `delivered` | chegou à caixa do destinatário | — |
+| `bounce` | devolveu | `reason` (diagnóstico do servidor), `bounce_classification` |
+| `dropped` | o provedor recusou antes de tentar (hoje, vírus) | `reason`, `bounce_classification: virus_detected` |
+| `suppressed` | não saiu: o endereço está na supressão | `reason`, `bounce_classification` |
+| `rendering_failure` | não foi possível montar a mensagem | `reason`, `bounce_classification: render_failure` |
+| `spamreport` | marcado como spam | `reason` |
+| `open` | aberto | `machine_open` |
+| `click` | clicado | `url`, `machine_open` |
+| `unsubscribe` | descadastrou pela página | — |
+| `resubscribe` | voltou a se cadastrar pela página | — |
+
+`processed` e `deferred` existem no WiseData Mail mas **não** são entregues por
+webhook.
+
+Os valores de `bounce_classification`: `invalid_address`, `previously_bounced`,
+`on_account_suppression`, `on_tenant_suppression`, `failed_validation`,
+`rejected_by_server` (nenhum adianta repetir); `mailbox_full`,
+`delivery_timeout`, `temporary_failure` (adianta mais tarde);
+`message_too_large`, `content_rejected`, `attachment_rejected`,
+`render_failure` (só mudando a mensagem); `virus_detected`; `undetermined`.
+
+**Entrega**
+
+- Qualquer resposta que não seja `2xx` é falha: o lote volta com espera
+  crescente (10s, 30s, 1min, 5min, 15min) por até doze horas, com o mesmo
+  `X-WiseData-Delivery` e o mesmo corpo, byte a byte.
+- Tempo limite de dez segundos. Redirecionamento não é seguido — um `3xx` é
+  falha.
+- Vinte lotes falhados seguidos **desativam** o webhook; os eventos do período
+  desligado não são reenviados.
+- Latência de até cerca de setenta segundos: não é canal de tempo real.
+- Trocar o segredo no painel invalida o anterior na hora.
+
+### Fora do Laravel
+
+```php
+use WiseData\Mail\Webhook\WebhookPayload;
+use WiseData\Mail\Webhook\WebhookSignature;
+
 $corpo = file_get_contents('php://input');
-$timestamp = $_SERVER['HTTP_X_WISEDATA_TIMESTAMP'] ?? '';
 
-$esperada = 'sha256='.hash_hmac('sha256', $timestamp.'.'.$corpo, $segredo);
-
-// `hash_equals`, nunca `===`: comparação comum vaza o tamanho do prefixo certo.
-// A janela de cinco minutos é o que impede o reenvio de um par capturado.
-if (abs(time() - (int) $timestamp) > 300
-    || ! hash_equals($esperada, $_SERVER['HTTP_X_WISEDATA_SIGNATURE'] ?? '')) {
+if (! WebhookSignature::verify(
+    $corpo,
+    $_SERVER['HTTP_X_WISEDATA_TIMESTAMP'] ?? '',
+    $_SERVER['HTTP_X_WISEDATA_SIGNATURE'] ?? '',
+    $segredo,
+)) {
     http_response_code(401);
     exit;
+}
+
+foreach (WebhookPayload::parse($corpo)->events as $evento) {
+    // $evento->type, $evento->email, $evento->messageId, ...
 }
 ```
 
 Três coisas que dão errado e não parecem defeito:
 
 - **Assine o corpo cru.** Decodificar e recodificar o JSON muda a ordem das
-  chaves e o escape, e a conferência deixa de bater. No Laravel, use
-  `$request->getContent()`, não `$request->all()`.
-- **Responda 2xx antes de processar.** O tempo limite é de dez segundos, e o
-  lote é reenviado a cada resposta que não seja 2xx.
+  chaves e o escape, e a conferência deixa de bater. No Laravel,
+  `$request->getContent()`, nunca `$request->all()`.
+- **Compare em tempo constante** — o `verify()` usa `hash_equals`.
 - **Deduplique pelo `X-WiseData-Delivery`.** O reenvio leva o mesmo id e o mesmo
   corpo.
-
-A rota precisa ficar **fora do CSRF** (`$except` do `VerifyCsrfToken`, ou em
-`routes/api.php`): quem chama é um servidor, sem sessão e sem token.
 
 ## Outra biblioteca HTTP
 
 O padrão é cURL para o pacote não impor escolha a ninguém. Quem já usa Guzzle ou
-o cliente do Laravel implementa `WiseData\Mail\Contracts\Transport` e injeta:
+o cliente do Laravel implementa `WiseData\Mail\Contracts\Transport`.
+
+No Laravel, registre no contêiner — o `Client` e o mailer passam a usá-lo:
+
+```php
+// AppServiceProvider::register()
+$this->app->singleton(\WiseData\Mail\Contracts\Transport::class, fn () => new MeuTransporte);
+```
+
+Fora dele:
 
 ```php
 new Client(token: '...', transport: new MeuTransporte);
 ```
 
-## Testes
+## Testes do pacote
 
 ```bash
 composer install
-vendor/bin/phpunit
+vendor/bin/phpunit                    # tudo, com Laravel (orchestra/testbench)
+vendor/bin/phpunit --testsuite core   # só o que não depende de Laravel
 ```
 
-Não há chamada de rede na suíte — o `FakeTransport` devolve respostas
-programadas.
+Não há chamada de rede na suíte. O CI roda Symfony Mailer 6.4 (sem Laravel),
+7.x (Laravel 12) e 8.x (Laravel 13).
 
 ## Licença
 

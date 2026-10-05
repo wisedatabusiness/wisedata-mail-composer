@@ -82,6 +82,50 @@ return [
     'mail' => [
         'message_type' => env('WISEDATA_MAIL_MESSAGE_TYPE'),
         'retries' => env('WISEDATA_MAIL_MAIL_RETRIES', 0),
+
+        /*
+         * O remetente. Desligado (padrão), o `from` da mensagem — o
+         * `MAIL_FROM_ADDRESS`, ou o `from()` do Mailable — vai na chamada e
+         * precisa ser um remetente VERIFICADO no WiseData Mail; se não for, a
+         * API recusa com 422 (`validation_failed`). Ligado, o `from` não vai e
+         * a mensagem sai pelo remetente padrão da conta.
+         */
+        'use_account_sender' => env('WISEDATA_MAIL_USE_ACCOUNT_SENDER', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook (eventos de entrega, devolução, abertura...)
+    |--------------------------------------------------------------------------
+    |
+    | `secret` é o segredo exibido UMA vez ao criar o webhook em Configurações ›
+    | Webhooks. Sem ele, o receptor recusa tudo.
+    |
+    | `path` liga a rota pronta (`POST /{path}`). Vazio, nenhuma rota é
+    | registrada: o pacote não abre endpoint em aplicação que não pediu.
+    |
+    | `tolerance` é a janela, em segundos, entre o `X-WiseData-Timestamp` e o
+    | relógio daqui. É o que impede reenviar um par (corpo, assinatura)
+    | capturado.
+    |
+    | `dedupe_ttl` é por quanto tempo o `X-WiseData-Delivery` já processado é
+    | lembrado. A API reenvia um lote por até doze horas; um dia cobre com folga.
+    | `cache_store` vazio usa o cache padrão — num servidor com várias
+    | instâncias, precisa ser um cache compartilhado (Redis, banco).
+    |
+    | `accept_test_events`: o desfecho simulado na caixa de homologação chega ao
+    | MESMO endereço dos reais. Desligado, ele é descartado antes de virar
+    | evento — senão uma devolução simulada descadastraria um cliente de verdade.
+    |
+    */
+
+    'webhook' => [
+        'secret' => env('WISEDATA_MAIL_WEBHOOK_SECRET'),
+        'path' => env('WISEDATA_MAIL_WEBHOOK_PATH'),
+        'tolerance' => (int) env('WISEDATA_MAIL_WEBHOOK_TOLERANCE', 300),
+        'dedupe_ttl' => (int) env('WISEDATA_MAIL_WEBHOOK_DEDUPE_TTL', 86400),
+        'cache_store' => env('WISEDATA_MAIL_WEBHOOK_CACHE_STORE'),
+        'accept_test_events' => env('WISEDATA_MAIL_WEBHOOK_ACCEPT_TEST_EVENTS', false),
     ],
 
 ];

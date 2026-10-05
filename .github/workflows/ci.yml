@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 jobs:
@@ -12,12 +13,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # As duas pontas do que o `composer.json` promete. Testar só a mais
-        # nova deixaria passar sintaxe que o piso não entende — e o piso é o
-        # que alguns produtos da casa ainda rodam.
-        php: ['8.3', '8.4']
+        # Cada linha é uma combinação que um produto da casa roda de verdade.
+        # O `symfony/mailer` vem com o Laravel; a linha 6.4 roda sem Laravel
+        # porque nenhum Laravel com suporte usa mais a 6.4. O Laravel 11 ficou
+        # de fora: todas as versões dele têm aviso de segurança aberto, e o
+        # Composer se recusa a instalá-las.
+        include:
+          - php: '8.3'
+            symfony: '6.4.*'
+            laravel: ''
+          - php: '8.3'
+            symfony: '7.*'
+            laravel: '12.*'
+            testbench: '10.*'
+          - php: '8.4'
+            symfony: '8.*'
+            laravel: '13.*'
+            testbench: '11.*'
 
-    name: PHP ${{ matrix.php }}
+    name: PHP ${{ matrix.php }} · Symfony ${{ matrix.symfony }} · Laravel ${{ matrix.laravel || 'nenhum' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +42,41 @@ jobs:
           extensions: curl, json
           coverage: none
 
-      - run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Dependências sem Laravel
+        if: matrix.laravel == ''
+        run: |
+          composer remove --dev orchestra/testbench --no-update --no-interaction
+          composer require --dev "symfony/mailer:${{ matrix.symfony }}" --no-update --no-interaction
+          composer update --prefer-dist --no-interaction --no-progress
 
-      - run: vendor/bin/phpunit
+      - name: Dependências com Laravel
+        if: matrix.laravel != ''
+        run: |
+          composer require --dev "symfony/mailer:${{ matrix.symfony }}" "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-update --no-interaction
+          composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Testes sem Laravel
+        if: matrix.laravel == ''
+        run: vendor/bin/phpunit --testsuite core
+
+      - name: Testes
+        if: matrix.laravel != ''
+        run: vendor/bin/phpunit
+
+  # A versão no `User-Agent` sai de `Client::VERSION`; publicar uma tag que não
+  # bate com ela é repetir o `0.3.0` que viajou na 1.0.x.
+  versao:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: A tag é Client::VERSION
+        run: |
+          versao=$(php -r 'require "src/Client.php"; echo WiseData\Mail\Client::VERSION;')
+          test "v$versao" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} diferente de Client::VERSION ($versao)"; exit 1; }

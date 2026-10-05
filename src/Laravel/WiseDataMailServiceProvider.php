@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace WiseData\Mail\Laravel;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use WiseData\Mail\Client;
+use WiseData\Mail\Contracts\Transport;
+use WiseData\Mail\Http\CurlTransport;
+use WiseData\Mail\Laravel\Console\TestMailCommand;
+use WiseData\Mail\Laravel\Webhook\VerifyWebhookSignature;
+use WiseData\Mail\Laravel\Webhook\WebhookController;
 use WiseData\Mail\Mailer\WiseDataMailTransport;
 
 /**
@@ -22,6 +28,10 @@ use WiseData\Mail\Mailer\WiseDataMailTransport;
  * ```php
  * app(\WiseData\Mail\Client::class)->contacts()->upsert([...]);
  * ```
+ *
+ * O transporte HTTP é resolvido pelo contêiner (`Contracts\Transport`), tanto
+ * para o `Client` quanto para o mailer. É o ponto de injeção: a aplicação troca
+ * o cURL pelo Guzzle com um `bind`, e o `WiseDataMail::fake()` troca pela fake.
  */
 final class WiseDataMailServiceProvider extends ServiceProvider
 {
@@ -33,6 +43,9 @@ final class WiseDataMailServiceProvider extends ServiceProvider
          * antes da primeira chamada é um passo que ninguém lembra.
          */
         $this->mergeConfigFrom(__DIR__.'/../../config/wisedata-mail.php', 'wisedata-mail');
+
+        /* `If`: um `bind` da aplicação, feito antes ou depois, prevalece. */
+        $this->app->singletonIf(Transport::class, static fn (): Transport => new CurlTransport);
 
         /*
          * `singleton`: o cliente não guarda estado de requisição — só token,
@@ -48,6 +61,7 @@ final class WiseDataMailServiceProvider extends ServiceProvider
                 baseUrl: (string) $config->get('wisedata-mail.base_url', 'https://api.wisedatamail.com'),
                 space: $config->get('wisedata-mail.space') ?: null,
                 retries: (int) $config->get('wisedata-mail.retries', 2),
+                transport: $app->make(Transport::class),
             );
         });
 
@@ -60,9 +74,12 @@ final class WiseDataMailServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../../config/wisedata-mail.php' => $this->app->configPath('wisedata-mail.php'),
             ], 'wisedata-mail-config');
+
+            $this->commands([TestMailCommand::class]);
         }
 
         $this->estenderMail();
+        $this->registrarRotaDoWebhook();
     }
 
     /**
@@ -112,6 +129,7 @@ final class WiseDataMailServiceProvider extends ServiceProvider
 
             $espaco = $config['space'] ?? $global->get('wisedata-mail.space');
             $tipo = $config['message_type'] ?? $global->get('wisedata-mail.mail.message_type');
+            $remetenteDaConta = $config['use_account_sender'] ?? $global->get('wisedata-mail.mail.use_account_sender', false);
 
             return new WiseDataMailTransport(
                 new Client(
@@ -128,9 +146,36 @@ final class WiseDataMailServiceProvider extends ServiceProvider
                      * próprio e é a única a repetir.
                      */
                     retries: (int) $global->get('wisedata-mail.mail.retries', 0),
+                    transport: $this->app->make(Transport::class),
                 ),
                 is_string($tipo) && $tipo !== '' ? $tipo : null,
+                filter_var($remetenteDaConta, FILTER_VALIDATE_BOOLEAN),
             );
         });
+    }
+
+    /**
+     * A rota pronta do webhook, só quando `WISEDATA_MAIL_WEBHOOK_PATH` está preenchido.
+     *
+     * Fora dos grupos `web` e `api`: sem sessão nem CSRF, que um servidor
+     * chamando não tem, e sem o `throttle` da API, que recusaria uma rajada de
+     * lotes depois de uma campanha.
+     */
+    private function registrarRotaDoWebhook(): void
+    {
+        $caminho = $this->app->make('config')->get('wisedata-mail.webhook.path');
+
+        if (! is_string($caminho) || trim($caminho, '/ ') === '') {
+            return;
+        }
+
+        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            return;
+        }
+
+        $this->app->make('router')
+            ->post(trim($caminho, '/ '), WebhookController::class)
+            ->middleware(VerifyWebhookSignature::class)
+            ->name('wisedata-mail.webhook');
     }
 }

@@ -16,6 +16,9 @@ use WiseData\Mail\Http\Response;
  */
 class ApiException extends WiseDataMailException
 {
+    /** Validação recusada; os campos e as mensagens ficam em `$extra['errors']`. */
+    public const VALIDACAO = 'validation_failed';
+
     /**
      * @param  array<string, mixed>  $extra  os campos que ajudam a consertar a chamada
      */
@@ -32,7 +35,18 @@ class ApiException extends WiseDataMailException
     {
         $corpo = $resposta->data;
 
-        $error = is_string($corpo['error'] ?? null) ? $corpo['error'] : 'unknown_error';
+        $error = match (true) {
+            is_string($corpo['error'] ?? null) => $corpo['error'],
+
+            /*
+             * A validação da API responde no formato padrão do Laravel
+             * (`message` + `errors`), sem `error`. O código vem do pacote para o
+             * `if` de quem integra não depender de `unknown_error`.
+             */
+            $resposta->status === 422 && is_array($corpo['errors'] ?? null) => self::VALIDACAO,
+
+            default => 'unknown_error',
+        };
         $mensagem = is_string($corpo['message'] ?? null)
             ? $corpo['message']
             : "A API respondeu {$resposta->status} sem uma mensagem legível.";

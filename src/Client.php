@@ -36,7 +36,11 @@ use WiseData\Mail\Resource\Emails;
  */
 final class Client
 {
-    public const VERSION = '0.3.0';
+    /**
+     * A única fonte da versão do pacote: vai no `User-Agent`, e o `VersionTest`
+     * a confere contra o CHANGELOG e o CI contra a tag publicada.
+     */
+    public const VERSION = '1.1.0';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 

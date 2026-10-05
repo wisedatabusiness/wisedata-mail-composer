@@ -52,9 +52,17 @@ final class WiseDataMailTransport extends AbstractTransport
     /** @var list<string> */
     private const TIPOS = ['marketing', 'transactional'];
 
+    /**
+     * @param  bool  $useAccountSender  não manda o `from` da mensagem: a API usa o
+     *                                  remetente padrão da conta. Sem isto, o `from`
+     *                                  (no Laravel, o `MAIL_FROM_ADDRESS`) vai na
+     *                                  chamada e precisa ser um remetente verificado
+     *                                  no WiseData Mail, ou a API recusa com 422.
+     */
     public function __construct(
         private readonly Client $client,
         private readonly ?string $messageType = null,
+        private readonly bool $useAccountSender = false,
     ) {
         parent::__construct();
     }
@@ -76,7 +84,11 @@ final class WiseDataMailTransport extends AbstractTransport
             'subject' => $email->getSubject(),
             'html' => $this->corpo($email->getHtmlBody()),
             'text' => $this->corpo($email->getTextBody()),
-            'from' => $this->primeiroEndereco($email->getFrom()),
+            /*
+             * Só o endereço: o nome exibido é o do cadastro do remetente no
+             * WiseData Mail, e a API não aceita outro.
+             */
+            'from' => $this->useAccountSender ? null : $this->primeiroEndereco($email->getFrom()),
             'reply_to' => $this->primeiroEndereco($email->getReplyTo()),
             'message_type' => $this->tipo($email),
             'headers' => $this->cabecalhosExtras($email),
