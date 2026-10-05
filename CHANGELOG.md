@@ -4,6 +4,14 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.1.1] - 2026-10-05
+
+### Corrigido
+
+- README e `ApiException`: a API passou a devolver `error: validation_failed`
+  no 422 de validação; o texto dizia que ela respondia sem `error`. O pacote
+  continua dando o mesmo código quando fala com uma API antiga.
+
 ## [1.1.0] - 2026-10-05
 
 ### Adicionado

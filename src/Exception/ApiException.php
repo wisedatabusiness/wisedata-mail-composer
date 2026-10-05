@@ -39,9 +39,9 @@ class ApiException extends WiseDataMailException
             is_string($corpo['error'] ?? null) => $corpo['error'],
 
             /*
-             * A validação da API responde no formato padrão do Laravel
-             * (`message` + `errors`), sem `error`. O código vem do pacote para o
-             * `if` de quem integra não depender de `unknown_error`.
+             * A API já manda `error: validation_failed` no 422; este ramo cobre a
+             * versão antiga, que respondia só `message` + `errors`, para o `if`
+             * de quem integra não cair em `unknown_error`.
              */
             $resposta->status === 422 && is_array($corpo['errors'] ?? null) => self::VALIDACAO,
 

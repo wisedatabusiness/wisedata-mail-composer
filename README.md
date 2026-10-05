@@ -410,7 +410,7 @@ Os principais:
 | `unknown_variable` | o modelo não usa a variável; os aceitos vêm em `extra['accepted_variables']` |
 | `missing_variable` | o modelo usa `extra['variable']` e ela não foi enviada |
 | `rate_limited` | passou do limite de requisições; esperar e repetir |
-| `validation_failed` | o corpo foi recusado na validação (422); os campos e as mensagens estão em `extra['errors']`. O caso mais comum é `from` que não é remetente verificado. Este código é dado **pelo pacote**: a API responde a validação no formato do Laravel, sem `error` |
+| `validation_failed` | o corpo foi recusado na validação (422); os campos e as mensagens estão em `extra['errors']`. O caso mais comum é `from` que não é remetente verificado. A API devolve `error: validation_failed` junto com `message` e `errors`; com uma API antiga, que respondia sem `error`, o pacote dá o mesmo código |
 
 No mailer, tudo isso chega como `WiseDataMailTransportException`, que é uma
 `TransportException` do Symfony — o job falha e vai para `failed_jobs` como
