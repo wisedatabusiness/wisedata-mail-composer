@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace WiseData\Mail\Mailer;
 
+use Symfony\Component\Mailer\Header\MetadataHeader;
+use Symfony\Component\Mailer\Header\TagHeader;
 use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Address;
@@ -13,6 +15,7 @@ use Symfony\Component\Mime\MessageConverter;
 use WiseData\Mail\Client;
 use WiseData\Mail\Exception\ApiException;
 use WiseData\Mail\Exception\WiseDataMailException;
+use WiseData\Mail\Validation\SendRules;
 
 /**
  * Faz `MAIL_MAILER=wisedatamail` funcionar.
@@ -94,12 +97,24 @@ final class WiseDataMailTransport extends AbstractTransport
             'headers' => $this->cabecalhosExtras($email),
 
             /*
+             * As `tags` e os `metadata` do `Envelope` do Laravel chegam como
+             * `TagHeader`/`MetadataHeader`. Vão nos campos próprios, como fazem
+             * os bridges oficiais do Symfony (SendGrid, Postmark, Mailgun):
+             * como cabeçalho, `X-Metadata-user_id` era recusado pela API e,
+             * se passasse, iria visível a quem recebe.
+             */
+            'tags' => $this->tags($email),
+            'metadata' => $this->metadados($email),
+
+            /*
              * Convertido ANTES da rede: o `AttachmentConverter` recusa o que não
              * pode sair, e uma mensagem com dez megabytes que o servidor
              * rejeitaria não tem por que subir.
              */
             'attachments' => AttachmentConverter::fromEmail($email),
         ], static fn (mixed $valor): bool => $valor !== null && $valor !== '' && $valor !== []);
+
+        $this->recusarForaDasRegras($payload);
 
         $dados = $this->enviar($payload);
 
@@ -258,10 +273,15 @@ final class WiseDataMailTransport extends AbstractTransport
         $extras = [];
 
         foreach ($email->getHeaders()->all() as $cabecalho) {
+            /* `X-Tag` e `X-Metadata-*` viajam nos campos próprios, nunca como cabeçalho. */
+            if ($cabecalho instanceof TagHeader || $cabecalho instanceof MetadataHeader) {
+                continue;
+            }
+
             $nome = $cabecalho->getName();
             $minusculo = strtolower($nome);
 
-            if (! str_starts_with($minusculo, 'x-') || str_starts_with($minusculo, 'x-ses-')) {
+            if (! str_starts_with($minusculo, 'x-') || str_starts_with($minusculo, SendRules::RESERVED_HEADER_PREFIX)) {
                 continue;
             }
 
@@ -269,6 +289,70 @@ final class WiseDataMailTransport extends AbstractTransport
         }
 
         return $extras;
+    }
+
+    /**
+     * Repetida sai uma vez só: o `Envelope` do Laravel trata tag como conjunto,
+     * e a API recusaria a lista inteira por causa da segunda.
+     *
+     * @return list<string>
+     */
+    private function tags(Email $email): array
+    {
+        $tags = [];
+
+        foreach ($email->getHeaders()->all() as $cabecalho) {
+            if ($cabecalho instanceof TagHeader) {
+                $tags[] = $cabecalho->getValue();
+            }
+        }
+
+        return array_values(array_unique($tags));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function metadados(Email $email): array
+    {
+        $metadados = [];
+
+        foreach ($email->getHeaders()->all() as $cabecalho) {
+            if ($cabecalho instanceof MetadataHeader) {
+                $metadados[$cabecalho->getKey()] = $cabecalho->getValue();
+            }
+        }
+
+        return $metadados;
+    }
+
+    /**
+     * As mesmas regras da API, antes da rede.
+     *
+     * Num job de fila, a recusa da API vira uma retentativa por mensagem — foram
+     * milhares em minutos no incidente que motivou isto. Recusando aqui, o erro
+     * diz qual campo está errado e nenhuma requisição sai.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function recusarForaDasRegras(array $payload): void
+    {
+        $violacoes = SendRules::violations($payload);
+
+        if ($violacoes === []) {
+            return;
+        }
+
+        $linhas = [];
+
+        foreach ($violacoes as $campo => $mensagens) {
+            $linhas[] = "{$campo}: ".implode(' ', $mensagens);
+        }
+
+        throw new WiseDataMailTransportException(
+            'A mensagem não passa nas regras do WiseData Mail e NADA foi enviado. '.implode(' | ', $linhas),
+            'validation_failed',
+        );
     }
 
     /**

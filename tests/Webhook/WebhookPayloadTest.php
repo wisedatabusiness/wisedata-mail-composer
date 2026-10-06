@@ -20,6 +20,7 @@ final class WebhookPayloadTest extends TestCase
                 'message_type' => 'transactional', 'url' => null,
                 'reason' => 'smtp; 550 5.1.1 user unknown', 'bounce_classification' => 'invalid_address',
                 'machine_open' => false, 'is_test' => false, 'space' => 'marca-b',
+                'tags' => ['due-reminders'], 'metadata' => ['user_id' => '42'],
             ]],
             'sent_at' => '2026-09-25T14:03:30+00:00',
         ]));
@@ -35,6 +36,19 @@ final class WebhookPayloadTest extends TestCase
         $this->assertSame('invalid_address', $evento->bounceClassification);
         $this->assertSame('marca-b', $evento->space);
         $this->assertFalse($evento->isTest);
+        $this->assertSame(['due-reminders'], $evento->tags);
+        $this->assertSame(['user_id' => '42'], $evento->metadata);
+    }
+
+    /** API anterior à 1.2.0, ou envio sem correlação: `null` vira vazio, não erro. */
+    public function test_sem_tags_nem_metadados_o_evento_le_vazio(): void
+    {
+        $payload = WebhookPayload::parse((string) json_encode([
+            'events' => [['id' => 1, 'type' => 'delivered', 'tags' => null, 'metadata' => null]],
+        ]));
+
+        $this->assertSame([], $payload->events[0]->tags);
+        $this->assertSame([], $payload->events[0]->metadata);
     }
 
     public function test_reconhece_o_ping_do_botao_testar(): void

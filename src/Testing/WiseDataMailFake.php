@@ -7,6 +7,7 @@ namespace WiseData\Mail\Testing;
 use PHPUnit\Framework\Assert;
 use WiseData\Mail\Contracts\Transport;
 use WiseData\Mail\Http\Response;
+use WiseData\Mail\Validation\SendRules;
 
 /**
  * Substitui só a fronteira HTTP: o `Client` e o transport do mailer continuam os
@@ -16,7 +17,8 @@ use WiseData\Mail\Http\Response;
  * `new Client('wdm_x', transport: $fake = new WiseDataMailFake)`.
  *
  * Todo envio é aceito com `202` e um `id` sequencial, a não ser depois de
- * `failWith()`.
+ * `failWith()` — ou quando o corpo fere as regras da API (nome de cabeçalho,
+ * `tags`, `metadata`): aí volta o mesmo `422 validation_failed` que ela daria.
  */
 final class WiseDataMailFake implements Transport
 {
@@ -44,6 +46,20 @@ final class WiseDataMailFake implements Transport
 
         if (! $this->isEmailSend($method, $url)) {
             return new Response(200, ['data' => []]);
+        }
+
+        /*
+         * A fake recusa o que a API recusaria. Aceitar tudo foi o que deixou um
+         * `X-Metadata-user_id` passar no CI da aplicação e falhar só em produção.
+         */
+        $violacoes = SendRules::violations($body ?? []);
+
+        if ($violacoes !== []) {
+            return new Response(422, [
+                'error' => 'validation_failed',
+                'message' => 'Recusado pelo WiseDataMailFake com as regras da API.',
+                'errors' => $violacoes,
+            ]);
         }
 
         $this->sent[] = $body ?? [];

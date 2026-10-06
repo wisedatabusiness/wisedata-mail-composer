@@ -4,6 +4,33 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.2.0] - 2026-10-06
+
+### Adicionado
+
+- **`tags` e `metadata` do `Envelope` do Laravel** vão nos campos `tags` e
+  `metadata` de `POST /v1/emails` (como os bridges oficiais do Symfony fazem
+  com Postmark, SendGrid e Mailgun) e voltam nos webhooks:
+  `WebhookEvent::$tags` e `WebhookEvent::$metadata`.
+- `WiseData\Mail\Validation\SendRules`: as regras de nome de cabeçalho, tags e
+  metadados da API, conferidas antes da rede.
+
+### Corrigido
+
+- `TagHeader` e `MetadataHeader` eram encaminhados como cabeçalho
+  (`X-Tag`, `X-Metadata-user_id`). A API recusava o `_` com 422 e, se
+  passasse, o metadado ficaria visível a quem recebe. Agora nunca viram
+  cabeçalho.
+- Cabeçalho `X-` com nome que a API recusa (ex.: `X-Pedido_Id`) é recusado
+  localmente com `WiseDataMailTransportException` (`validation_failed`), sem
+  requisição.
+
+### Alterado
+
+- `WiseDataMailFake` aplica as regras da API (cabeçalho, tags, metadados) e
+  devolve o mesmo `422 validation_failed`. Teste que mandava corpo inválido e
+  passava agora falha — que é o objetivo.
+
 ## [1.1.2] - 2026-10-06
 
 ### Corrigido

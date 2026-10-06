@@ -38,6 +38,8 @@ final class WebhookEvent
     /**
      * @param  int  $messageId  o `id` devolvido no envio — é o que `SentMessage::getMessageId()` guarda
      * @param  array<string, mixed>  $raw
+     * @param  list<string>  $tags  as `tags` do envio; vazia quando não houve
+     * @param  array<string, string>  $metadata  os `metadata` do envio, valores sempre texto
      */
     public function __construct(
         public readonly int $id,
@@ -54,6 +56,9 @@ final class WebhookEvent
         public readonly bool $isTest,
         public readonly ?string $space,
         public readonly array $raw = [],
+        /* Depois de `$raw` para não quebrar quem constrói por posição. */
+        public readonly array $tags = [],
+        public readonly array $metadata = [],
     ) {}
 
     /**
@@ -85,7 +90,37 @@ final class WebhookEvent
             isTest: ($dados['is_test'] ?? false) === true,
             space: self::texto($dados['space'] ?? null),
             raw: $dados,
+            tags: self::textos($dados['tags'] ?? null),
+            metadata: self::mapa($dados['metadata'] ?? null),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function textos(mixed $valor): array
+    {
+        return is_array($valor) ? array_values(array_filter($valor, is_string(...))) : [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function mapa(mixed $valor): array
+    {
+        if (! is_array($valor)) {
+            return [];
+        }
+
+        $mapa = [];
+
+        foreach ($valor as $chave => $texto) {
+            if (is_string($chave) && is_string($texto)) {
+                $mapa[$chave] = $texto;
+            }
+        }
+
+        return $mapa;
     }
 
     public function isTransactional(): bool

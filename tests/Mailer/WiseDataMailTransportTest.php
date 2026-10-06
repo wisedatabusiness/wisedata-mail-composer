@@ -6,6 +6,8 @@ namespace WiseData\Mail\Tests\Mailer;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
+use Symfony\Component\Mailer\Header\MetadataHeader;
+use Symfony\Component\Mailer\Header\TagHeader;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 use WiseData\Mail\Client;
@@ -245,6 +247,49 @@ final class WiseDataMailTransportTest extends TestCase
         $cabecalhos = $http->ultima()['body']['headers'] ?? [];
 
         $this->assertSame(['X-Pedido' => '1234'], $cabecalhos);
+    }
+
+    /**
+     * Nome que a API recusaria é recusado aqui, sem rede.
+     *
+     * Num job de fila, a recusa remota vira uma retentativa por mensagem; foram
+     * milhares em minutos no incidente do `X-Metadata-user_id`.
+     */
+    public function test_cabecalho_x_com_nome_invalido_e_recusado_localmente(): void
+    {
+        $http = new FakeTransport;
+
+        $email = $this->email();
+        $email->getHeaders()->addTextHeader('X-Pedido_Id', '1234');
+
+        try {
+            $this->transport($http)->send($email);
+            $this->fail('o "_" no nome precisa ser recusado antes da rede.');
+        } catch (WiseDataMailTransportException $e) {
+            $this->assertSame('validation_failed', $e->error);
+            $this->assertStringContainsString('X-Pedido_Id', $e->getMessage());
+        }
+
+        $this->assertSame([], $http->chamadas, 'nenhuma requisição podia ter saído');
+    }
+
+    /** `TagHeader`/`MetadataHeader` montados à mão no Symfony seguem o mesmo caminho do `Envelope`. */
+    public function test_tag_e_metadado_do_symfony_vao_nos_campos_proprios(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $email = $this->email();
+        $email->getHeaders()->add(new TagHeader('digest'));
+        $email->getHeaders()->add(new TagHeader('digest'));
+        $email->getHeaders()->add(new MetadataHeader('user_id', '42'));
+
+        $this->transport($http)->send($email);
+
+        $corpo = $http->ultima()['body'];
+
+        $this->assertSame(['digest'], $corpo['tags'] ?? null, 'tag repetida sai uma vez só.');
+        $this->assertSame(['user_id' => '42'], $corpo['metadata'] ?? null);
+        $this->assertArrayNotHasKey('headers', $corpo);
     }
 
     /** Sem tipo declarado, a chave decide — a chamada nem manda o campo. */

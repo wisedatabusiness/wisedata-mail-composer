@@ -293,6 +293,56 @@ public function headers(): Headers
 O cabeçalho é lido e removido — não chega a quem recebe. Os demais `X-...` da
 sua aplicação são encaminhados.
 
+### Tags e metadados do Laravel
+
+```php
+public function envelope(): Envelope
+{
+    return new Envelope(
+        subject: 'Suas contas vencem amanhã',
+        tags: ['due-reminders'],
+        metadata: ['user_id' => $this->user->id, 'reminder_type' => 'digest'],
+    );
+}
+```
+
+O `Envelope` vira `TagHeader`/`MetadataHeader` no Symfony, e o transport os
+manda nos campos `tags` e `metadata` da chamada — **nunca como cabeçalho do
+e-mail**. É o mesmo que os bridges oficiais do Symfony fazem com Postmark,
+SendGrid e Mailgun. Eles ficam guardados com a mensagem e voltam em todo evento
+de webhook dela (`$evento->tags`, `$evento->metadata`), para você ligar a
+devolução ou a entrega ao registro de origem.
+
+| Regra | Teto |
+|---|---|
+| tags | 10, até 128 caracteres cada; repetida sai uma vez só |
+| metadados | 10 chaves |
+| chave | até 40; letras, números, `_`, `.` e `-`, começando por letra ou `_` |
+| valor | texto, número ou booleano, até 255; volta no webhook sempre como texto |
+
+Fora disso, o transport recusa **antes da rede** com
+`WiseDataMailTransportException` (`error: validation_failed`) dizendo o campo.
+
+**Não ponha dado pessoal aqui** (e-mail, nome, CPF): o metadado fica no banco do
+Mail e viaja até o seu endpoint de webhook. Use o id interno.
+
+> Por que existe: até a 1.1.2 o transport mandava os metadados como cabeçalho
+> `X-Metadata-user_id`, que a API recusa (o `_` não vale em nome de cabeçalho)
+> — e que, se passasse, mostraria o `user_id` a quem recebe o e-mail.
+
+### Cabeçalhos personalizados
+
+Todo `X-...` que a sua aplicação puser na mensagem vai em `headers`, conferido
+localmente com a regra da API:
+
+- nome só com **letras, números e hífen** (`X-Pedido-Id` passa; `X-Pedido_Id`
+  é recusado);
+- até 10 cabeçalhos, valor até 255 caracteres e sem quebra de linha;
+- a família **`X-SES-`** é reservada da infraestrutura de envio: o transport a
+  descarta, e a API a recusa se chegar pela chamada crua. Os nomes que o e-mail
+  monta sozinho (`From`, `To`, `Message-ID`, `List-Unsubscribe`, ...) também são
+  reservados.
+
 ### Repetição e e-mail duplicado
 
 O mailer usa `retries: 0` de propósito. Repetir um `POST` de envio é arriscar
@@ -339,9 +389,15 @@ public function test_o_recibo_sai_pelo_wisedata_mail(): void
 
 `WiseDataMail::fake()` troca só a **fronteira HTTP**: o mailer `wisedatamail` e o
 `Client` do contêiner continuam os reais, então o teste prova o corpo que sairia
-para a API — `to`, `subject`, `html`, `text`, `from`, `attachments`, `headers`.
+para a API — `to`, `subject`, `html`, `text`, `from`, `attachments`, `headers`,
+`tags`, `metadata`.
 Cada envio é aceito com um `id` sequencial (`1`, `2`, ...). Vale também para o
 mailer que já tinha sido resolvido antes do `fake()`, e não exige token.
+
+**A fake aplica as regras da API** (nome de cabeçalho, limites de `tags` e
+`metadata`) e devolve o mesmo `422 validation_failed` que ela daria, com
+`errors`. Assim um `Mailable` que a API recusaria quebra no seu CI, e não em
+produção.
 
 | Método | |
 |---|---|
