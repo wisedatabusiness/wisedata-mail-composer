@@ -4,6 +4,18 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.4.0] - 2026-10-06
+
+### Adicionado
+
+- **Listas padrão pelo `.env`**: `WISEDATA_MAIL_CONTACT_LISTS=clientes-finances,leads`.
+  Todo `contacts()->upsert()` que não fala de listas manda `add_lists` com
+  elas — acrescenta, nunca substitui. Fora do Laravel,
+  `Client::withContactLists()`. `forSpace()` para outro espaço as larga.
+- A lista pela **chave** (`clientes-finances`) em `upsert` (`lists` e
+  `add_lists`), `addToLists()` e `removeFromLists()`. O id continua aceito.
+- `add_lists` no `upsert`: entrar em listas sem sair das outras, numa chamada só.
+
 ## [1.3.0] - 2026-10-06
 
 ### Adicionado

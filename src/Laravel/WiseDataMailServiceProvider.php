@@ -16,6 +16,7 @@ use WiseData\Mail\Laravel\Console\TestMailCommand;
 use WiseData\Mail\Laravel\Webhook\VerifyWebhookSignature;
 use WiseData\Mail\Laravel\Webhook\WebhookController;
 use WiseData\Mail\Mailer\WiseDataMailTransport;
+use WiseData\Mail\Resource\ListReferences;
 
 /**
  * Registra o `Client` no contêiner do Laravel.
@@ -62,6 +63,7 @@ final class WiseDataMailServiceProvider extends ServiceProvider
                 space: $config->get('wisedata-mail.space') ?: null,
                 retries: (int) $config->get('wisedata-mail.retries', 2),
                 transport: $app->make(Transport::class),
+                contactLists: ListReferences::fromConfig($config->get('wisedata-mail.contact_lists')),
             );
         });
 

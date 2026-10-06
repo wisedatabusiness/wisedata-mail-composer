@@ -49,6 +49,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Listas padrão do contato
+    |--------------------------------------------------------------------------
+    |
+    | As listas em que todo contato gravado por `contacts()->upsert()` entra,
+    | separadas por vírgula: `clientes-finances,leads`. Use a CHAVE da lista
+    | (painel › Listas, ou o bloco "Integração" do espaço) — ela é a mesma em
+    | todo ambiente; o id também é aceito.
+    |
+    | Acrescenta, nunca substitui: a chamada que manda `lists` ou `add_lists`
+    | decide sozinha, e as listas que a pessoa já tem ficam.
+    |
+    */
+
+    'contact_lists' => env('WISEDATA_MAIL_CONTACT_LISTS'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Tentativas extra
     |--------------------------------------------------------------------------
     |

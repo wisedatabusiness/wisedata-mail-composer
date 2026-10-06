@@ -55,15 +55,43 @@ $mail->contacts()->deleteByEmail('ana@exemplo.com');    // para quem não tem ex
 segmentação dele.
 
 Para ACRESCENTAR sem conhecer as outras listas — o caso de quem administra uma
-lista entre várias:
+lista entre várias —, `add_lists` no próprio `upsert`, numa chamada só:
 
 ```php
-$mail->contacts()->addToLists('usr_9', [3, 7]);
-$mail->contacts()->removeFromLists('usr_9', [3]);
+$mail->contacts()->upsert([
+    'external_id' => 'usr_9',
+    'email' => 'ana@exemplo.com',
+    'add_lists' => ['clientes-finances'],
+]);
+
+// ou, para um contato que já existe:
+$mail->contacts()->addToLists('usr_9', ['clientes-finances']);
+$mail->contacts()->removeFromLists('usr_9', ['clientes-finances']);
 ```
 
-Com o `upsert` seria preciso ler antes de escrever, e a corrida apagaria o que
-outro produto vinculou no intervalo.
+Com o `lists` seria preciso ler antes de escrever, e a corrida apagaria o que
+outro produto vinculou no intervalo. `lists` e `add_lists` juntos são recusados.
+
+### A lista pela chave
+
+Cada lista tem uma **chave** (`clientes-finances`) que nasce do nome e nunca
+muda. Use-a em vez do id: é a mesma em todo ambiente — o `.env` de produção e
+o de desenvolvimento ficam iguais — e diz qual lista é. Ela aparece no painel
+em **Listas** e no bloco **Integração** de cada espaço. O id continua aceito.
+
+### Listas padrão pelo `.env`
+
+```dotenv
+WISEDATA_MAIL_CONTACT_LISTS=clientes-finances,leads
+```
+
+Todo `upsert()` que não fala de listas passa a mandar `add_lists` com elas — o
+usuário que confirmou o e-mail entra na lista do produto sem uma linha a mais no
+código. A chamada que manda `lists` ou `add_lists` decide sozinha.
+
+As listas padrão são do espaço configurado: `forSpace('outro')` as larga, porque
+a mesma chave em outro espaço seria outra lista. Fora do Laravel,
+`$mail->withContactLists(['clientes-finances'])`.
 
 ### Campos personalizados
 
@@ -72,11 +100,11 @@ Descubra os nomes uma vez, no boot do seu serviço:
 
 ```php
 $mail->catalog()->fields();   // [['key' => 'plano_atual', 'type' => 'text', ...], ...]
-$mail->catalog()->lists();    // [['id' => 3, 'name' => 'Clientes'], ...]
+$mail->catalog()->lists();    // [['key' => 'clientes-finances', 'id' => 3, 'name' => 'Clientes'], ...]
 ```
 
-Campo personalizado fala por `key`; lista fala por `id` — a pessoa renomeia a
-lista na tela sem avisar ninguém, e o nome deixaria de casar em silêncio.
+Campo personalizado e lista falam por `key` — nunca pelo nome: a pessoa renomeia
+a lista na tela sem avisar ninguém, e o nome deixaria de casar em silêncio.
 
 ### Espaços de envio
 
@@ -188,7 +216,11 @@ O provider é descoberto sozinho. Basta o `.env`:
 ```dotenv
 WISEDATA_MAIL_TOKEN=wdm_abc_def
 # WISEDATA_MAIL_SPACE=marca-b
+# WISEDATA_MAIL_CONTACT_LISTS=clientes-finances
 ```
+
+O bloco **Integração** de cada espaço, no painel (Configurações › Espaços), traz
+essas linhas prontas para copiar.
 
 ```php
 app(\WiseData\Mail\Client::class)->contacts()->upsert([...]);

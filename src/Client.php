@@ -40,7 +40,7 @@ final class Client
      * A única fonte da versão do pacote: vai no `User-Agent`, e o `VersionTest`
      * a confere contra o CHANGELOG e o CI contra a tag publicada.
      */
-    public const VERSION = '1.3.0';
+    public const VERSION = '1.4.0';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 
@@ -50,6 +50,9 @@ final class Client
      * @param  string  $token  o `wdm_...` da tela de Integrações
      * @param  ?string  $space  slug do espaço de envio, quando a chave alcança mais de um
      * @param  int  $retries  tentativas EXTRA em 429, 5xx e falha de rede
+     * @param  list<int|string>  $contactLists  listas (chave ou id) em que todo
+     *                                          contato gravado por `upsert()` entra
+     *                                          quando a chamada não fala de listas
      */
     public function __construct(
         private readonly string $token,
@@ -57,6 +60,7 @@ final class Client
         private readonly ?string $space = null,
         private readonly int $retries = 2,
         ?Transport $transport = null,
+        private readonly array $contactLists = [],
     ) {
         if (trim($token) === '') {
             throw new TransportException('O token da API está vazio. Pegue-o em Configurações › Integrações.');
@@ -127,6 +131,7 @@ final class Client
             'token' => $this->mascarado(),
             'baseUrl' => $this->baseUrl,
             'space' => $this->space,
+            'contactLists' => $this->contactLists,
             'retries' => $this->retries,
             'transport' => $this->transport::class,
         ];
@@ -153,10 +158,36 @@ final class Client
         return new Emails($this);
     }
 
-    /** Um cliente igual a este, apontando para outro espaço de envio. */
+    /**
+     * Um cliente igual a este, apontando para outro espaço de envio.
+     *
+     * As listas padrão só acompanham quando o espaço é o MESMO: lista é da base
+     * de um espaço, e a chave `clientes` deste seria outra lista (ou nenhuma)
+     * naquele — o contato entraria na lista errada ou a API recusaria.
+     */
     public function forSpace(?string $space): self
     {
-        return new self($this->token, $this->baseUrl, $space, $this->retries, $this->transport);
+        $listas = $space === $this->space ? $this->contactLists : [];
+
+        return new self($this->token, $this->baseUrl, $space, $this->retries, $this->transport, $listas);
+    }
+
+    /**
+     * Um cliente igual a este, com estas listas padrão no `upsert()`.
+     *
+     * @param  list<int|string>  $listas  chave (`clientes-finances`) ou id
+     */
+    public function withContactLists(array $listas): self
+    {
+        return new self($this->token, $this->baseUrl, $this->space, $this->retries, $this->transport, $listas);
+    }
+
+    /**
+     * @return list<int|string>
+     */
+    public function contactLists(): array
+    {
+        return $this->contactLists;
     }
 
     /**

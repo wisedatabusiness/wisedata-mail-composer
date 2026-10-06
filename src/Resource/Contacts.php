@@ -28,6 +28,12 @@ final class Contacts
     /**
      * Cria ou corrige. A identidade é `external_id`; sem ele, o e-mail.
      *
+     * Com listas padrão configuradas (`WISEDATA_MAIL_CONTACT_LISTS`) e a
+     * chamada sem `lists` nem `add_lists`, o contato ENTRA nelas por
+     * `add_lists` — acrescenta, nunca substitui: as listas que o painel ou
+     * outro produto deram à mesma pessoa ficam. Quem manda `lists` ou
+     * `add_lists` decide sozinho.
+     *
      * @param  array<string, mixed>  $contato
      * @return array<string, mixed> o contato gravado
      *
@@ -35,6 +41,12 @@ final class Contacts
      */
     public function upsert(array $contato): array
     {
+        $padrao = $this->client->contactLists();
+
+        if ($padrao !== [] && ! array_key_exists('lists', $contato) && ! array_key_exists('add_lists', $contato)) {
+            $contato['add_lists'] = $padrao;
+        }
+
         return $this->dado($this->client->request('PUT', 'contacts', body: $contato));
     }
 
@@ -91,7 +103,7 @@ final class Contacts
      * conhece as outras: com o upsert, teria de ler antes de escrever, e a
      * corrida apagaria o que outro produto vinculou no intervalo.
      *
-     * @param  list<int>  $listIds
+     * @param  list<int|string>  $listIds  chave (`clientes-finances`) ou id
      * @return array<string, mixed> o contato, já com as listas atualizadas
      *
      * @throws ApiException
@@ -106,7 +118,7 @@ final class Contacts
     }
 
     /**
-     * @param  list<int>  $listIds
+     * @param  list<int|string>  $listIds  chave ou id
      * @return array<string, mixed>
      *
      * @throws ApiException

@@ -61,6 +61,18 @@ final class FakeTest extends TestCase
         $this->assertCount(2, $fake->requests());
     }
 
+    /** O `.env` chega ao corpo: é o caminho que o produto usa de verdade, sem montar `Client` à mão. */
+    public function test_as_listas_do_env_entram_no_upsert_por_add_lists(): void
+    {
+        config(['wisedata-mail.contact_lists' => 'clientes-finances,leads']);
+
+        $fake = WiseDataMail::fake();
+
+        WiseDataMail::contacts()->upsert(['external_id' => 'usr_9', 'email' => 'ana@exemplo.com']);
+
+        $this->assertSame(['clientes-finances', 'leads'], $fake->requests()[0]['body']['add_lists'] ?? null);
+    }
+
     /** A resposta da fake tem a forma da API: o teste da aplicação que lê `subject` não pode ver `null` só no CI. */
     public function test_a_resposta_da_fake_devolve_o_assunto_como_a_api(): void
     {
