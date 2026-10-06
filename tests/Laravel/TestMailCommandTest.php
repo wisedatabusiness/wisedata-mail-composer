@@ -21,6 +21,19 @@ final class TestMailCommandTest extends TestCase
         $fake->assertSentTo('ana@exemplo.com');
     }
 
+    /** A API exige `html` quando não há `template`: só texto era recusado com 422. */
+    public function test_manda_html_alem_do_texto(): void
+    {
+        $fake = WiseDataMail::fake();
+
+        $this->artisan('wisedata-mail:test', ['email' => 'ana@exemplo.com'])->assertSuccessful();
+
+        $fake->assertSentTo('ana@exemplo.com', static fn (array $corpo): bool => is_string($corpo['html'] ?? null)
+            && str_contains($corpo['html'], 'e-mail de teste')
+            && is_string($corpo['text'] ?? null)
+            && str_contains($corpo['text'], 'e-mail de teste'));
+    }
+
     public function test_mostra_o_codigo_do_erro_da_api(): void
     {
         WiseDataMail::fake()->failWith('invalid_api_key', 401, 'Chave inválida.');

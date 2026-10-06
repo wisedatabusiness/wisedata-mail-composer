@@ -55,9 +55,12 @@ final class TestMailCommand extends Command
             $this->line("Remetente: {$this->remetente($nome)}");
             $this->line("Enviando para {$email} pelo mailer [{$nome}]...");
 
-            $enviada = $mailer->raw(
-                'Este é um e-mail de teste enviado pelo WiseData Mail. Se ele chegou, o envio está funcionando.',
-                static fn (Message $mensagem) => $mensagem->to($email)->subject('Teste de envio — WiseData Mail'),
+            $texto = 'Este é um e-mail de teste enviado pelo WiseData Mail. Se ele chegou, o envio está funcionando.';
+
+            // A API exige `html` quando não há `template`: o `raw()` mandava só texto e voltava 422.
+            $enviada = $mailer->html(
+                '<p>'.$texto.'</p>',
+                static fn (Message $mensagem) => $mensagem->to($email)->subject('Teste de envio — WiseData Mail')->text($texto),
             );
         } catch (WiseDataMailTransportException $e) {
             $this->error("A API recusou o envio ({$e->error}): {$e->getMessage()}");

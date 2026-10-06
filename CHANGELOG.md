@@ -4,6 +4,14 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.1.2] - 2026-10-06
+
+### Corrigido
+
+- `wisedata-mail:test` mandava só texto (`Mail::raw`), e a API exige `html`
+  quando não há `template`: o teste voltava 422 mesmo com tudo configurado.
+  Agora manda html e texto.
+
 ## [1.1.1] - 2026-10-05
 
 ### Corrigido
