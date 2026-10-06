@@ -4,6 +4,16 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.3.0] - 2026-10-06
+
+### Adicionado
+
+- `WebhookEvent::$subject`: o assunto como saiu para a pessoa, que a API passou
+  a guardar e a mandar em todo evento. `null` em mensagem anterior à mudança.
+  Entra depois de `$metadata`, sem quebrar quem constrói o evento por posição.
+- A resposta de `POST /v1/emails` traz `subject` (o assunto final, com as
+  variáveis do modelo trocadas); `WiseDataMailFake` devolve o mesmo campo.
+
 ## [1.2.0] - 2026-10-06
 
 ### Adicionado

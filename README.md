@@ -708,9 +708,14 @@ if (! WebhookSignature::verify(
 }
 
 foreach (WebhookPayload::parse($corpo)->events as $evento) {
-    // $evento->type, $evento->email, $evento->messageId, ...
+    // $evento->type, $evento->email, $evento->messageId, $evento->subject, ...
 }
 ```
+
+`$evento->subject` é o assunto como saiu para a pessoa (variáveis do modelo
+trocadas; na campanha, a variante A/B resolvida). Vem `null` na mensagem de
+campanha que não saiu (suprimida, recusada) e em mensagem enviada antes de a API
+passar a guardá-lo (06/10/2026).
 
 Três coisas que dão errado e não parecem defeito:
 

@@ -61,6 +61,16 @@ final class FakeTest extends TestCase
         $this->assertCount(2, $fake->requests());
     }
 
+    /** A resposta da fake tem a forma da API: o teste da aplicação que lê `subject` não pode ver `null` só no CI. */
+    public function test_a_resposta_da_fake_devolve_o_assunto_como_a_api(): void
+    {
+        WiseDataMail::fake();
+
+        $resposta = WiseDataMail::emails()->send(['to' => 'ana@exemplo.com', 'subject' => 'Sua fatura', 'html' => '<p>a</p>']);
+
+        $this->assertSame('Sua fatura', $resposta['subject'] ?? null);
+    }
+
     public function test_assert_nothing_sent_falha_quando_houve_envio(): void
     {
         $fake = WiseDataMail::fake();

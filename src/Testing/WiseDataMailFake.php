@@ -68,6 +68,8 @@ final class WiseDataMailFake implements Transport
         return new Response(202, ['data' => [
             'id' => $this->lastId,
             'to' => $body['to'] ?? null,
+            /* Com `template` a API devolve o assunto renderizado, que a fake não conhece. */
+            'subject' => is_string($body['subject'] ?? null) ? $body['subject'] : null,
             'status' => 'pending',
             'provider_message_id' => null,
         ]]);

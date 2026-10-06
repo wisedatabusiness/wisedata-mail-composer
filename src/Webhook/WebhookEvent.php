@@ -40,6 +40,7 @@ final class WebhookEvent
      * @param  array<string, mixed>  $raw
      * @param  list<string>  $tags  as `tags` do envio; vazia quando não houve
      * @param  array<string, string>  $metadata  os `metadata` do envio, valores sempre texto
+     * @param  ?string  $subject  o assunto como saiu para a pessoa; `null` na campanha que não saiu e em mensagem anterior a 06/10/2026
      */
     public function __construct(
         public readonly int $id,
@@ -59,6 +60,7 @@ final class WebhookEvent
         /* Depois de `$raw` para não quebrar quem constrói por posição. */
         public readonly array $tags = [],
         public readonly array $metadata = [],
+        public readonly ?string $subject = null,
     ) {}
 
     /**
@@ -92,6 +94,7 @@ final class WebhookEvent
             raw: $dados,
             tags: self::textos($dados['tags'] ?? null),
             metadata: self::mapa($dados['metadata'] ?? null),
+            subject: self::texto($dados['subject'] ?? null),
         );
     }
 

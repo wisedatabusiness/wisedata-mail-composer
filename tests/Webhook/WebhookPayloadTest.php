@@ -21,6 +21,7 @@ final class WebhookPayloadTest extends TestCase
                 'reason' => 'smtp; 550 5.1.1 user unknown', 'bounce_classification' => 'invalid_address',
                 'machine_open' => false, 'is_test' => false, 'space' => 'marca-b',
                 'tags' => ['due-reminders'], 'metadata' => ['user_id' => '42'],
+                'subject' => 'Suas contas vencem amanhã',
             ]],
             'sent_at' => '2026-09-25T14:03:30+00:00',
         ]));
@@ -38,6 +39,17 @@ final class WebhookPayloadTest extends TestCase
         $this->assertFalse($evento->isTest);
         $this->assertSame(['due-reminders'], $evento->tags);
         $this->assertSame(['user_id' => '42'], $evento->metadata);
+        $this->assertSame('Suas contas vencem amanhã', $evento->subject);
+    }
+
+    /** API anterior à 1.3.0, ou mensagem anterior à coluna: sem assunto é `null`, não erro. */
+    public function test_sem_assunto_o_evento_le_nulo(): void
+    {
+        $semCampo = WebhookPayload::parse((string) json_encode(['events' => [['id' => 1, 'type' => 'delivered']]]));
+        $nulo = WebhookPayload::parse((string) json_encode(['events' => [['id' => 1, 'type' => 'delivered', 'subject' => null]]]));
+
+        $this->assertNull($semCampo->events[0]->subject);
+        $this->assertNull($nulo->events[0]->subject);
     }
 
     /** API anterior à 1.2.0, ou envio sem correlação: `null` vira vazio, não erro. */
