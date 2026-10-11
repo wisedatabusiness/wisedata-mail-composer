@@ -77,7 +77,8 @@ outro produto vinculou no intervalo. `lists` e `add_lists` juntos são recusados
 Cada lista tem uma **chave** (`clientes-finances`) que nasce do nome e nunca
 muda. Use-a em vez do id: é a mesma em todo ambiente — o `.env` de produção e
 o de desenvolvimento ficam iguais — e diz qual lista é. Ela aparece no painel
-em **Listas** e no bloco **Integração** de cada espaço. O id continua aceito.
+em **Listas** e no bloco **Integração** de cada espaço — e da conta principal.
+O id continua aceito.
 
 ### Listas padrão pelo `.env`
 
@@ -119,6 +120,17 @@ $marcaB->contacts()->upsert([...]);
 estava. Com vários espaços vinculados e nenhum escolhido, a API **recusa** em
 vez de adivinhar: escolher errado gravaria o cliente de uma marca na base de
 outra, em silêncio.
+
+| Espaços marcados na chave | Sem espaço na chamada | Com espaço |
+|---|---|---|
+| nenhum (chave da conta principal) | a conta principal | **recusa** (`space_not_allowed`) |
+| um | esse espaço | só ele |
+| vários | **recusa** (`space_required`) | um dos marcados |
+
+**A chave sem espaço marcado não é chave-mestra.** Ela age só na conta
+principal; para alcançar um espaço, marque-o na chave (Configurações ›
+Integrações). Um espaço criado depois também não entra sozinho. Quem precisa da
+conta principal *e* de um espaço usa duas chaves.
 
 ## Enviando e-mail
 
@@ -220,7 +232,8 @@ WISEDATA_MAIL_TOKEN=wdm_abc_def
 ```
 
 O bloco **Integração** de cada espaço, no painel (Configurações › Espaços), traz
-essas linhas prontas para copiar.
+essas linhas prontas para copiar. O da **conta principal**, na mesma tela, traz
+só a das listas: o produto ligado à conta mãe não manda `WISEDATA_MAIL_SPACE`.
 
 ```php
 app(\WiseData\Mail\Client::class)->contacts()->upsert([...]);
@@ -486,7 +499,7 @@ Os principais:
 | `invalid_api_key` | conferir o token e se ele não foi revogado |
 | `insufficient_scope` | criar uma chave com o escopo em `extra['required_scope']` |
 | `space_required` | informar o espaço com `forSpace()` |
-| `space_not_allowed` | o espaço não pertence à chave |
+| `space_not_allowed` | o espaço não está marcado na chave — a da conta principal não alcança nenhum: tire o `WISEDATA_MAIL_SPACE` ou marque o espaço nela |
 | `plan_feature_required` | o plano da conta não inclui a API |
 | `subscription_locked` | a assinatura não está ativa |
 | `account_read_only` | a conta está em consulta; escrita bloqueada |

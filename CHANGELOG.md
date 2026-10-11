@@ -4,6 +4,18 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.4.1] - 2026-10-11
+
+### Alterado
+
+- **Documentação do alcance da chave**, acompanhando a API: a chave sem espaço
+  marcado age **só na conta principal** e deixou de alcançar os espaços pelo
+  `X-WiseData-Space`. Com ela, `forSpace()` ou `WISEDATA_MAIL_SPACE` recebem
+  403 `space_not_allowed`. Nenhuma mudança de código no pacote — quem usa uma
+  chave por espaço não precisa fazer nada.
+- O painel passou a ter o bloco **Integração** também para a conta principal,
+  com a linha `WISEDATA_MAIL_CONTACT_LISTS` das listas dela.
+
 ## [1.4.0] - 2026-10-06
 
 ### Adicionado

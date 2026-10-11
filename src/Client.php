@@ -33,6 +33,10 @@ use WiseData\Mail\Resource\Emails;
  * apontando para um deles — clone, e não mutação, porque um produto que
  * atende três marcas guarda os três clientes em variáveis diferentes, e
  * um `setSpace()` faria a última chamada mudar para onde a anterior grava.
+ *
+ * A chave SEM espaço marcado é da conta principal e não alcança espaço
+ * nenhum: com ela, `forSpace()` (ou `WISEDATA_MAIL_SPACE`) recebe 403
+ * `space_not_allowed`.
  */
 final class Client
 {
@@ -40,7 +44,7 @@ final class Client
      * A única fonte da versão do pacote: vai no `User-Agent`, e o `VersionTest`
      * a confere contra o CHANGELOG e o CI contra a tag publicada.
      */
-    public const VERSION = '1.4.0';
+    public const VERSION = '1.4.1';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 

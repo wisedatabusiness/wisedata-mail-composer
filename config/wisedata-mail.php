@@ -40,8 +40,12 @@ return [
     |--------------------------------------------------------------------------
     |
     | O slug do espaço, quando a chave alcança mais de um. Deixe vazio se ela
-    | alcança um só ou a conta inteira — com vários vinculados e sem isto aqui,
-    | a API recusa em vez de escolher por você.
+    | alcança um só — com vários vinculados e sem isto aqui, a API recusa em
+    | vez de escolher por você.
+    |
+    | Deixe vazio também na chave da CONTA PRINCIPAL (nenhum espaço marcado):
+    | ela não alcança espaço nenhum, e preencher isto faz toda chamada voltar
+    | 403 `space_not_allowed`.
     |
     */
 
@@ -54,7 +58,8 @@ return [
     |
     | As listas em que todo contato gravado por `contacts()->upsert()` entra,
     | separadas por vírgula: `clientes-finances,leads`. Use a CHAVE da lista
-    | (painel › Listas, ou o bloco "Integração" do espaço) — ela é a mesma em
+    | (painel › Listas, ou o bloco "Integração" do espaço ou da conta
+    | principal, em Configurações › Espaços) — ela é a mesma em
     | todo ambiente; o id também é aceito.
     |
     | Acrescenta, nunca substitui: a chamada que manda `lists` ou `add_lists`
