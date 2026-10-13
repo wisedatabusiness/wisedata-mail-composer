@@ -6,6 +6,7 @@ namespace WiseData\Mail\Resource;
 
 use WiseData\Mail\Client;
 use WiseData\Mail\Exception\ApiException;
+use WiseData\Mail\Validation\SendRules;
 
 /**
  * O disparo transacional: recibo, código de verificação, redefinição de senha.
@@ -98,6 +99,22 @@ final class Emails
      */
     public function sendBatch(array $emails): array
     {
+        /*
+         * Conferido antes da rede: num lote de cem, um nome de cabeçalho errado
+         * recusaria todas as mensagens, e a resposta só chegaria depois de subir
+         * o corpo inteiro. A recusa local tem a mesma forma da remota.
+         */
+        $violacoes = SendRules::batchViolations($emails);
+
+        if ($violacoes !== []) {
+            throw new ApiException(
+                ApiException::VALIDACAO,
+                422,
+                'O lote fere as regras da API; nada foi enviado.',
+                ['errors' => $violacoes],
+            );
+        }
+
         $resposta = $this->client->request('POST', 'emails/batch', body: ['emails' => $emails]);
 
         $itens = [];

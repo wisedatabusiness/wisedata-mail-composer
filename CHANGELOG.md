@@ -4,6 +4,15 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.5.1] - 2026-10-12
+
+### Alterado
+
+- `sendBatch()` confere o lote com as regras da API **antes da rede** e lança
+  `ApiException` (`validation_failed`, com `errors` no caminho do item, como
+  `emails.1.attachments`) sem subir nada. Num lote de cem, um cabeçalho com
+  nome inválido recusaria todas as mensagens só depois de enviar o corpo inteiro.
+
 ## [1.5.0] - 2026-10-12
 
 ### Adicionado

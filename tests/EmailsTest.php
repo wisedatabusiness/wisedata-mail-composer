@@ -124,6 +124,25 @@ final class EmailsTest extends TestCase
         $this->assertSame(['error' => 'send_quota_exceeded'], $resultados[1]['error'] ?? null);
     }
 
+    /** O lote que a API recusaria não sobe: a recusa é local, com o caminho do item, e nada vai à rede. */
+    public function test_lote_fora_das_regras_e_recusado_sem_rede(): void
+    {
+        $transporte = (new FakeTransport)->responde(200, ['data' => []]);
+
+        try {
+            $this->cliente($transporte)->emails()->sendBatch([
+                ['to' => 'ana@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>'],
+                ['to' => 'bia@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'attachments' => []],
+            ]);
+            $this->fail('o lote precisa ser recusado localmente');
+        } catch (ApiException $e) {
+            $this->assertSame('validation_failed', $e->error);
+            $this->assertArrayHasKey('emails.1.attachments', (array) ($e->extra['errors'] ?? []));
+        }
+
+        $this->assertSame([], $transporte->chamadas);
+    }
+
     private function cliente(FakeTransport $transporte): Client
     {
         return new Client('wdm_abc_def', transport: $transporte, retries: 0);
