@@ -21,6 +21,14 @@ use WiseData\Mail\Mailer\WiseDataMailTransportException;
  * Síncrono de propósito, e pelo mailer — não pelo `Client` direto: é o mesmo
  * caminho de um `Mailable` (token, espaço, remetente), e quem roda quer ver o
  * aceite ou o erro da API na hora.
+ *
+ * Assunto `PING`, corpo `PONG`: é entendido em qualquer idioma, e o pacote não
+ * precisa saber em que língua está a aplicação que o usa.
+ *
+ * O id da mensagem não é impresso. Ele não ajuda quem roda o comando — o
+ * resultado é o e-mail chegar —, e o terminal do servidor vai parar em log de
+ * deploy e em print de chamado. Para achar a mensagem, o painel busca pelo
+ * destinatário.
  */
 final class TestMailCommand extends Command
 {
@@ -28,7 +36,7 @@ final class TestMailCommand extends Command
         {email : Destinatário do e-mail de teste}
         {--mailer=wisedatamail : Mailer do config/mail.php que usa o transport wisedatamail}';
 
-    protected $description = 'Envia um e-mail de teste pelo WiseData Mail e mostra o id da mensagem ou o código do erro';
+    protected $description = 'Envia um PING pelo WiseData Mail (o corpo é PONG) e mostra o aceite ou o código do erro';
 
     public function handle(): int
     {
@@ -55,12 +63,10 @@ final class TestMailCommand extends Command
             $this->line("Remetente: {$this->remetente($nome)}");
             $this->line("Enviando para {$email} pelo mailer [{$nome}]...");
 
-            $texto = 'Este é um e-mail de teste enviado pelo WiseData Mail. Se ele chegou, o envio está funcionando.';
-
             // A API exige `html` quando não há `template`: o `raw()` mandava só texto e voltava 422.
-            $enviada = $mailer->html(
-                '<p>'.$texto.'</p>',
-                static fn (Message $mensagem) => $mensagem->to($email)->subject('Teste de envio — WiseData Mail')->text($texto),
+            $mailer->html(
+                '<p>PONG</p>',
+                static fn (Message $mensagem) => $mensagem->to($email)->subject('PING')->text('PONG'),
             );
         } catch (WiseDataMailTransportException $e) {
             $this->error("A API recusou o envio ({$e->error}): {$e->getMessage()}");
@@ -75,7 +81,6 @@ final class TestMailCommand extends Command
         }
 
         $this->info('Aceito pelo WiseData Mail.');
-        $this->line('Id da mensagem: '.($enviada?->getMessageId() ?? '(não informado)'));
 
         return self::SUCCESS;
     }

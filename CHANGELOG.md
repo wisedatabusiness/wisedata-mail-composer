@@ -4,6 +4,17 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.5.2] - 2026-10-12
+
+### Alterado
+
+- **`wisedata-mail:test` manda `PING` e o corpo é `PONG`**, no lugar da frase
+  em português: entendido em qualquer idioma, sem o pacote precisar saber a
+  língua da aplicação.
+- O comando **não imprime mais o id da mensagem**. Não ajudava quem roda — a
+  prova é o e-mail chegar — e o terminal do servidor vai parar em log de deploy
+  e em print de chamado.
+
 ## [1.5.1] - 2026-10-12
 
 ### Alterado

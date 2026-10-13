@@ -473,14 +473,18 @@ php artisan wisedata-mail:test voce@exemplo.com --mailer=wisedatamail_marketing
 ```
 
 Envia **na hora** (sem fila) pelo mesmo caminho de um `Mailable` — token,
-espaço, remetente — e mostra:
+espaço, remetente — um e-mail com assunto **`PING`** e corpo **`PONG`**
+(entendido em qualquer idioma), e mostra:
 
 ```text
 Remetente: avisos@seudominio.com (precisa ser um remetente verificado no WiseData Mail)
 Enviando para voce@exemplo.com pelo mailer [wisedatamail]...
 Aceito pelo WiseData Mail.
-Id da mensagem: 8821
 ```
+
+O id da mensagem não é impresso: a prova é o `PONG` chegar, e o terminal do
+servidor costuma ir parar em log de deploy. No painel, a mensagem é achada pelo
+destinatário.
 
 ou o código do erro da API (`invalid_api_key`, `validation_failed` com o campo
 recusado, ...), com saída `1`. Funciona mesmo com outro mailer como padrão: o

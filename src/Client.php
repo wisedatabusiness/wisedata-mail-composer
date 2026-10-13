@@ -44,7 +44,7 @@ final class Client
      * A única fonte da versão do pacote: vai no `User-Agent`, e o `VersionTest`
      * a confere contra o CHANGELOG e o CI contra a tag publicada.
      */
-    public const VERSION = '1.5.1';
+    public const VERSION = '1.5.2';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 

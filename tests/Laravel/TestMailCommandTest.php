@@ -8,30 +8,33 @@ use WiseData\Mail\Laravel\Facades\WiseDataMail;
 
 final class TestMailCommandTest extends TestCase
 {
-    public function test_envia_e_mostra_o_id(): void
+    /** O id da mensagem não aparece: o terminal do servidor vai para log de deploy e print de chamado. */
+    public function test_envia_e_mostra_o_aceite_sem_o_id(): void
     {
         $fake = WiseDataMail::fake();
 
         $this->artisan('wisedata-mail:test', ['email' => 'ana@exemplo.com'])
             ->expectsOutputToContain('Remetente: avisos@exemplo.com')
             ->expectsOutputToContain('Aceito pelo WiseData Mail.')
-            ->expectsOutputToContain('Id da mensagem: 1')
+            ->doesntExpectOutputToContain('Id da mensagem')
             ->assertSuccessful();
 
         $fake->assertSentTo('ana@exemplo.com');
     }
 
-    /** A API exige `html` quando não há `template`: só texto era recusado com 422. */
-    public function test_manda_html_alem_do_texto(): void
+    /**
+     * PING no assunto, PONG no corpo: entendido em qualquer idioma. O `html`
+     * vai junto porque a API o exige quando não há `template`.
+     */
+    public function test_manda_ping_e_o_corpo_e_pong(): void
     {
         $fake = WiseDataMail::fake();
 
         $this->artisan('wisedata-mail:test', ['email' => 'ana@exemplo.com'])->assertSuccessful();
 
-        $fake->assertSentTo('ana@exemplo.com', static fn (array $corpo): bool => is_string($corpo['html'] ?? null)
-            && str_contains($corpo['html'], 'e-mail de teste')
-            && is_string($corpo['text'] ?? null)
-            && str_contains($corpo['text'], 'e-mail de teste'));
+        $fake->assertSentTo('ana@exemplo.com', static fn (array $corpo): bool => ($corpo['subject'] ?? null) === 'PING'
+            && ($corpo['html'] ?? null) === '<p>PONG</p>'
+            && ($corpo['text'] ?? null) === 'PONG');
     }
 
     public function test_mostra_o_codigo_do_erro_da_api(): void
