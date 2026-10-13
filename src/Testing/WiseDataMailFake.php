@@ -44,6 +44,10 @@ final class WiseDataMailFake implements Transport
             return $this->failure;
         }
 
+        if ($this->isBatchSend($method, $url)) {
+            return $this->lote($body ?? []);
+        }
+
         if (! $this->isEmailSend($method, $url)) {
             return new Response(200, ['data' => []]);
         }
@@ -55,24 +59,66 @@ final class WiseDataMailFake implements Transport
         $violacoes = SendRules::violations($body ?? []);
 
         if ($violacoes !== []) {
-            return new Response(422, [
-                'error' => 'validation_failed',
-                'message' => 'Recusado pelo WiseDataMailFake com as regras da API.',
-                'errors' => $violacoes,
-            ]);
+            return $this->recusa($violacoes);
         }
 
-        $this->sent[] = $body ?? [];
+        return new Response(202, ['data' => $this->aceitar($body ?? [])]);
+    }
+
+    /**
+     * O lote: tudo ou nada na estrutura, como a API. Cada mensagem aceita entra em
+     * `sent()` — o teste da aplicação confere o lote com as mesmas asserções do avulso.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function lote(array $body): Response
+    {
+        $emails = is_array($body['emails'] ?? null) ? array_values($body['emails']) : [];
+        $violacoes = SendRules::batchViolations($emails);
+
+        if ($violacoes !== []) {
+            return $this->recusa($violacoes);
+        }
+
+        $itens = [];
+
+        foreach ($emails as $indice => $email) {
+            /** @var array<string, mixed> $email */
+            $itens[] = ['index' => $indice, 'replayed' => false, ...$this->aceitar($email)];
+        }
+
+        return new Response(200, ['data' => $itens]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function aceitar(array $body): array
+    {
+        $this->sent[] = $body;
         $this->lastId++;
 
-        return new Response(202, ['data' => [
+        return [
             'id' => $this->lastId,
             'to' => $body['to'] ?? null,
             /* Com `template` a API devolve o assunto renderizado, que a fake não conhece. */
             'subject' => is_string($body['subject'] ?? null) ? $body['subject'] : null,
             'status' => 'pending',
             'provider_message_id' => null,
-        ]]);
+        ];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $violacoes
+     */
+    private function recusa(array $violacoes): Response
+    {
+        return new Response(422, [
+            'error' => 'validation_failed',
+            'message' => 'Recusado pelo WiseDataMailFake com as regras da API.',
+            'errors' => $violacoes,
+        ]);
     }
 
     /**
@@ -158,5 +204,12 @@ final class WiseDataMailFake implements Transport
         $caminho = (string) parse_url($url, PHP_URL_PATH);
 
         return strtoupper($method) === 'POST' && str_ends_with(rtrim($caminho, '/'), '/v1/emails');
+    }
+
+    private function isBatchSend(string $method, string $url): bool
+    {
+        $caminho = (string) parse_url($url, PHP_URL_PATH);
+
+        return strtoupper($method) === 'POST' && str_ends_with(rtrim($caminho, '/'), '/v1/emails/batch');
     }
 }

@@ -221,6 +221,74 @@ valor do EVENTO que originou a mensagem (`pedido-1234-confirmado`), nunca de um
 aleatório: um `uuid()` gerado na hora da chamada muda a cada tentativa e não
 protege de nada.
 
+### Em lote
+
+Até **100 mensagens numa chamada** — é o caminho para volume: cem convites
+custam uma requisição do limite de 600 por minuto, não cem.
+
+```php
+$resultados = $mail->emails()->sendBatch([
+    [
+        'to' => 'ana@exemplo.com',
+        'subject' => 'Como foi seu atendimento?',
+        'html' => $html,
+        'message_type' => 'marketing',
+        'idempotency_key' => 'convite-81',
+        'metadata' => ['invitation_id' => 81],
+    ],
+    // ...
+]);
+
+foreach ($resultados as $item) {
+    if (isset($item['error'])) {
+        // $item['index'], $item['status'] (o HTTP do envio avulso), $item['error']['error']
+        continue;
+    }
+
+    // $item['index'], $item['id'], $item['status'] ('pending' ou 'suppressed'), $item['replayed']
+}
+```
+
+- Cada item aceita os campos de `send()`, **menos anexo**, e mais
+  `idempotency_key` — a chave é por mensagem, no corpo. O cabeçalho
+  `Idempotency-Key` é recusado no lote: ele não diria qual das cem já saiu.
+- **Desfecho item a item.** Suprimida, sem cota, modelo inexistente: o item
+  volta com `error` e o resto do lote sai. A cota que acaba no meio recusa só as
+  que faltam.
+- **Recusa do lote inteiro** só quando a estrutura é inválida (422 com o caminho,
+  `emails.3.to`) ou a conta não pode enviar (503/403) — aí `sendBatch()` lança
+  `ApiException`, como o `send()`.
+- Retentativa segura: reenvie o MESMO lote com as mesmas chaves — o que já saiu
+  volta com `replayed: true` e não sai de novo.
+
+### Cancelamento em um clique (marketing)
+
+Gmail e Yahoo exigem `List-Unsubscribe` + `List-Unsubscribe-Post` de quem envia
+em volume. Em mensagem **de marketing**, mande os seus:
+
+```php
+'message_type' => 'marketing',
+'headers' => [
+    'List-Unsubscribe' => '<https://app.exemplo.com/sair/TOKEN>, <mailto:sair@exemplo.com>',
+    'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
+],
+```
+
+O descadastro continua **seu**: o WiseData Mail confere a forma e repassa — o
+clique cai na sua URL, e quem marca a pessoa como descadastrada é a sua
+aplicação.
+
+- `List-Unsubscribe`: entradas `<https://...>` e/ou `<mailto:...>` separadas
+  por vírgula.
+- `List-Unsubscribe-Post`: só `List-Unsubscribe=One-Click`, e exige um `https`
+  no `List-Unsubscribe` — é nele que o provedor faz o POST.
+- **Em `transactional` é recusado** (422): num recibo, o botão tiraria a pessoa
+  de uma lista. Sem `message_type`, vale o tipo padrão da chave.
+
+No Laravel, ponha os dois cabeçalhos no `Mailable` (`headers()`) junto com
+`X-WiseData-Message-Type: marketing`: o transport os encaminha, e só no
+transacional declarado os deixa de fora.
+
 ## Laravel
 
 O provider é descoberto sozinho. Basta o `.env`:
@@ -383,9 +451,11 @@ localmente com a regra da API:
 - nome só com **letras, números e hífen** (`X-Pedido-Id` passa; `X-Pedido_Id`
   é recusado);
 - até 10 cabeçalhos, valor até 255 caracteres e sem quebra de linha;
+- `List-Unsubscribe` e `List-Unsubscribe-Post` também são encaminhados — veja
+  "Cancelamento em um clique";
 - a família **`X-SES-`** é reservada da infraestrutura de envio: o transport a
   descarta, e a API a recusa se chegar pela chamada crua. Os nomes que o e-mail
-  monta sozinho (`From`, `To`, `Message-ID`, `List-Unsubscribe`, ...) também são
+  monta sozinho (`From`, `To`, `Message-ID`, `Bcc`, ...) também são
   reservados.
 
 ### Repetição e e-mail duplicado
@@ -597,6 +667,7 @@ final class SuprimirEnderecoDevolvido implements ShouldQueue
 
 | `type` | Evento Laravel |
 |---|---|
+| `processed` | `WiseDataMailProcessed` — só se o endpoint o assinou |
 | `delivered` | `WiseDataMailDelivered` |
 | `bounce` | `WiseDataMailBounced` |
 | `dropped` | `WiseDataMailDropped` |
@@ -701,6 +772,7 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 
 | `type` | O que aconteceu | Campos próprios |
 |---|---|---|
+| `processed` | o provedor aceitou a mensagem — **opcional**, um por envio | — |
 | `delivered` | chegou à caixa do destinatário | — |
 | `bounce` | devolveu | `reason` (diagnóstico do servidor), `bounce_classification` |
 | `dropped` | o provedor recusou antes de tentar (hoje, vírus) | `reason`, `bounce_classification: virus_detected` |
@@ -712,12 +784,16 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 | `unsubscribe` | descadastrou pela página | — |
 | `resubscribe` | voltou a se cadastrar pela página | — |
 
-`processed` e `deferred` existem no WiseData Mail mas **não** são entregues por
-webhook.
+`processed` só chega ao endpoint que o **marcou** no painel: é um aviso por
+mensagem enviada, útil para medir o funil (aceito → entregue) e volume demais
+para quem não precisa. `deferred` existe no WiseData Mail mas **não** é
+entregue por webhook — o provedor tenta de novo sozinho, e o desfecho chega
+depois.
 
 Os valores de `bounce_classification`: `invalid_address`, `previously_bounced`,
 `on_account_suppression`, `on_tenant_suppression`, `failed_validation`,
-`rejected_by_server` (nenhum adianta repetir); `mailbox_full`,
+`rejected_by_server`, `sender_check_failed` (o filtro de entrada do destino
+recusou; nenhum adianta repetir); `mailbox_full`,
 `delivery_timeout`, `temporary_failure` (adianta mais tarde);
 `message_too_large`, `content_rejected`, `attachment_rejected`,
 `render_failure` (só mudando a mensagem); `virus_detected`; `undetermined`.

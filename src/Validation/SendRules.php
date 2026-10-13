@@ -40,10 +40,28 @@ final class SendRules
         'date', 'sender', 'return-path',
         'content-type', 'content-transfer-encoding',
         'to', 'from', 'subject', 'reply-to', 'cc', 'bcc',
-        'list-unsubscribe', 'list-unsubscribe-post',
     ];
 
     public const RESERVED_HEADER_PREFIX = 'x-ses-';
+
+    /**
+     * O cancelamento em um clique do integrador (RFC 2369 e RFC 8058). Só em
+     * `marketing`: no transacional o botão tiraria alguém de uma lista por causa
+     * de um recibo.
+     */
+    public const LIST_UNSUBSCRIBE = 'List-Unsubscribe';
+
+    public const LIST_UNSUBSCRIBE_POST = 'List-Unsubscribe-Post';
+
+    public const ONE_CLICK = 'List-Unsubscribe=One-Click';
+
+    /** O teto do `POST /v1/emails/batch`. */
+    public const MAX_BATCH = 100;
+
+    public static function isListUnsubscribeHeader(string $nome): bool
+    {
+        return in_array(strtolower(trim($nome)), ['list-unsubscribe', 'list-unsubscribe-post'], true);
+    }
 
     /**
      * As violações do corpo, no formato de `errors` do 422 da API.
@@ -59,15 +77,135 @@ final class SendRules
     {
         return [
             ...self::headers($payload['headers'] ?? null),
+            ...self::listUnsubscribe($payload['headers'] ?? null, $payload['message_type'] ?? null),
             ...self::tags($payload['tags'] ?? null),
             ...self::metadata($payload['metadata'] ?? null),
         ];
+    }
+
+    /**
+     * As violações de um lote, com o caminho de cada mensagem (`emails.3.tags.1`).
+     *
+     * @param  list<mixed>  $emails
+     * @return array<string, list<string>>
+     */
+    public static function batchViolations(array $emails): array
+    {
+        if ($emails === [] || count($emails) > self::MAX_BATCH) {
+            return ['emails' => ['O lote leva de 1 a '.self::MAX_BATCH.' mensagens.']];
+        }
+
+        $erros = [];
+
+        foreach ($emails as $posicao => $email) {
+            if (! is_array($email)) {
+                $erros["emails.{$posicao}"] = ['Cada mensagem do lote é um objeto.'];
+
+                continue;
+            }
+
+            if (array_key_exists('attachments', $email)) {
+                $erros["emails.{$posicao}.attachments"] = ['Anexo não é aceito no lote. Envie essa mensagem por emails()->send().'];
+            }
+
+            /** @var array<string, mixed> $email */
+            foreach (self::violations($email) as $campo => $mensagens) {
+                $erros["emails.{$posicao}.{$campo}"] = $mensagens;
+            }
+        }
+
+        return $erros;
+    }
+
+    /**
+     * O par só em marketing e bem formado. O tipo ausente é decidido pela chave na
+     * API, que o pacote não conhece — então aqui só o `transactional` declarado recusa.
+     *
+     * @return array<string, list<string>>
+     */
+    private static function listUnsubscribe(mixed $cabecalhos, mixed $tipo): array
+    {
+        if (! is_array($cabecalhos)) {
+            return [];
+        }
+
+        $lista = null;
+        $post = null;
+
+        foreach ($cabecalhos as $nome => $valor) {
+            $minusculo = strtolower(trim((string) $nome));
+
+            if ($minusculo === 'list-unsubscribe' && is_string($valor)) {
+                $lista = $valor;
+            }
+
+            if ($minusculo === 'list-unsubscribe-post' && is_string($valor)) {
+                $post = $valor;
+            }
+        }
+
+        if ($lista === null && $post === null) {
+            return [];
+        }
+
+        if ($tipo === 'transactional') {
+            return ['headers' => ['List-Unsubscribe só pode ir em mensagem de marketing. Envie com message_type "marketing" ou tire o cabeçalho.']];
+        }
+
+        $erros = [];
+        $enderecos = $lista === null ? null : self::enderecosDeDescadastro($lista);
+
+        if ($lista !== null && $enderecos === null) {
+            $erros[] = 'List-Unsubscribe precisa ser uma ou mais entradas <https://...> ou <mailto:...>, separadas por vírgula.';
+        }
+
+        if ($post !== null && trim($post) !== self::ONE_CLICK) {
+            $erros[] = 'List-Unsubscribe-Post só aceita o valor "'.self::ONE_CLICK.'".';
+        }
+
+        $temHttps = array_filter($enderecos ?? [], static fn (string $e): bool => str_starts_with(strtolower($e), 'https://')) !== [];
+
+        if ($post !== null && ! $temHttps) {
+            $erros[] = 'List-Unsubscribe-Post exige um endereço https em List-Unsubscribe: é nele que o clique único faz o POST.';
+        }
+
+        return $erros === [] ? [] : ['headers' => $erros];
+    }
+
+    /**
+     * @return ?list<string> `null` quando o formato não fecha
+     */
+    private static function enderecosDeDescadastro(string $valor): ?array
+    {
+        $enderecos = [];
+
+        foreach (explode(',', $valor) as $parte) {
+            if (preg_match('/^\s*<([^<>\s]+)>\s*$/', $parte, $achado) !== 1) {
+                return null;
+            }
+
+            $esquema = strtolower((string) parse_url($achado[1], PHP_URL_SCHEME));
+            $valido = ($esquema === 'https' && filter_var($achado[1], FILTER_VALIDATE_URL) !== false)
+                || ($esquema === 'mailto' && strlen($achado[1]) > strlen('mailto:'));
+
+            if (! $valido) {
+                return null;
+            }
+
+            $enderecos[] = $achado[1];
+        }
+
+        return $enderecos === [] ? null : $enderecos;
     }
 
     /** `null` quando o nome passa. */
     public static function headerNameViolation(string $nome): ?string
     {
         $minusculo = strtolower(trim($nome));
+
+        if (self::isListUnsubscribeHeader($minusculo)) {
+            return null;
+        }
 
         if (in_array($minusculo, self::RESERVED_HEADERS, true) || str_starts_with($minusculo, self::RESERVED_HEADER_PREFIX)) {
             return "O cabeçalho \"{$nome}\" é reservado e não pode ser enviado.";

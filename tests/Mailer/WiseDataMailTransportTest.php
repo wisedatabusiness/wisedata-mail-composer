@@ -250,6 +250,31 @@ final class WiseDataMailTransportTest extends TestCase
     }
 
     /**
+     * O cancelamento em um clique da aplicação chega no marketing; no
+     * transacional declarado fica de fora, como a API exigiria.
+     */
+    public function test_list_unsubscribe_vai_no_marketing_e_fica_fora_do_transacional(): void
+    {
+        foreach (['marketing' => true, 'transactional' => false] as $tipo => $vai) {
+            $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+            $email = $this->email();
+            $email->getHeaders()->addTextHeader('X-WiseData-Message-Type', $tipo);
+            $email->getHeaders()->addTextHeader('List-Unsubscribe', '<https://nps.exemplo.com/sair/1>');
+            $email->getHeaders()->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+
+            $this->transport($http)->send($email);
+
+            $cabecalhos = $http->ultima()['body']['headers'] ?? [];
+
+            $this->assertSame($vai ? [
+                'List-Unsubscribe' => '<https://nps.exemplo.com/sair/1>',
+                'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
+            ] : [], $cabecalhos, $tipo);
+        }
+    }
+
+    /**
      * Nome que a API recusaria é recusado aqui, sem rede.
      *
      * Num job de fila, a recusa remota vira uma retentativa por mensagem; foram

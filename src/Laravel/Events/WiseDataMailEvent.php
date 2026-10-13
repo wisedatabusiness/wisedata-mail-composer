@@ -26,6 +26,7 @@ abstract class WiseDataMailEvent
     public static function from(WebhookEvent $evento, string $deliveryId): self
     {
         $classe = match ($evento->type) {
+            WebhookEvent::PROCESSED => WiseDataMailProcessed::class,
             WebhookEvent::DELIVERED => WiseDataMailDelivered::class,
             WebhookEvent::BOUNCE => WiseDataMailBounced::class,
             WebhookEvent::DROPPED => WiseDataMailDropped::class,

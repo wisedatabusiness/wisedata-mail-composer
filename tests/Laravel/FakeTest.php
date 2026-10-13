@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\AssertionFailedError;
 use WiseData\Mail\Client;
 use WiseData\Mail\Contracts\Transport;
+use WiseData\Mail\Exception\ApiException;
 use WiseData\Mail\Http\CurlTransport;
 use WiseData\Mail\Laravel\Facades\WiseDataMail;
 use WiseData\Mail\Mailer\WiseDataMailTransport;
@@ -92,6 +93,36 @@ final class FakeTest extends TestCase
 
         $this->expectException(AssertionFailedError::class);
         $fake->assertNothingSent();
+    }
+
+    /**
+     * O lote passa pela fake como passaria pela API: cada mensagem aceita entra
+     * em `sent()`, e a estrutura inválida recusa tudo com o caminho do item.
+     */
+    public function test_a_fake_aceita_o_lote_e_recusa_como_a_api(): void
+    {
+        $fake = WiseDataMail::fake();
+
+        $resultados = WiseDataMail::emails()->sendBatch([
+            ['to' => 'ana@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>'],
+            ['to' => 'bia@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>'],
+        ]);
+
+        $this->assertSame([0, 1], array_column($resultados, 'index'));
+        $fake->assertSentCount(2);
+        $fake->assertSentTo('bia@exemplo.com');
+
+        try {
+            WiseDataMail::emails()->sendBatch([
+                ['to' => 'ana@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'tags' => ['x', 'x']],
+            ]);
+            $this->fail('a recusa precisa chegar à aplicação');
+        } catch (ApiException $e) {
+            $this->assertSame('validation_failed', $e->error);
+            $this->assertArrayHasKey('emails.0.tags.1', (array) ($e->extra['errors'] ?? []));
+        }
+
+        $fake->assertSentCount(2);
     }
 
     public function test_fail_with_recusa_como_a_api_e_nao_conta_como_enviado(): void

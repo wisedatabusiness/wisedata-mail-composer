@@ -9,6 +9,7 @@ use Illuminate\Testing\TestResponse;
 use RuntimeException;
 use WiseData\Mail\Laravel\Events\WiseDataMailBounced;
 use WiseData\Mail\Laravel\Events\WiseDataMailDelivered;
+use WiseData\Mail\Laravel\Events\WiseDataMailProcessed;
 use WiseData\Mail\Laravel\Events\WiseDataMailUnknownEvent;
 use WiseData\Mail\Webhook\WebhookSignature;
 
@@ -42,6 +43,17 @@ final class WebhookReceiverTest extends TestCase
             && $e->deliveryId === '77');
         Event::assertDispatched(WiseDataMailBounced::class, static fn (WiseDataMailBounced $e): bool => $e->event->bounceClassification === 'invalid_address');
         Event::assertDispatched(WiseDataMailUnknownEvent::class);
+    }
+
+    /** `processed` é opcional na API; quem assina recebe a classe própria, não o "desconhecido". */
+    public function test_processed_vira_o_evento_proprio(): void
+    {
+        Event::fake([WiseDataMailProcessed::class, WiseDataMailUnknownEvent::class]);
+
+        $this->entregar([$this->evento(1, 'processed')])->assertNoContent();
+
+        Event::assertDispatched(WiseDataMailProcessed::class);
+        Event::assertNotDispatched(WiseDataMailUnknownEvent::class);
     }
 
     /** A API reenvia o mesmo lote com o mesmo `X-WiseData-Delivery`. */

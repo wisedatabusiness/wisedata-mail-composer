@@ -15,6 +15,9 @@ use WiseData\Mail\Exception\InvalidWebhookPayloadException;
  */
 final class WebhookEvent
 {
+    /** O provedor aceitou a mensagem. Só chega ao endpoint que o marcou: é um por envio. */
+    public const PROCESSED = 'processed';
+
     public const DELIVERED = 'delivered';
 
     public const BOUNCE = 'bounce';

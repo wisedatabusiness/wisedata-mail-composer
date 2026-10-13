@@ -81,6 +81,8 @@ final class WiseDataMailTransport extends AbstractTransport
 
         $this->recusarVariosDestinatarios($email);
 
+        $tipo = $this->tipo($email);
+
         $payload = array_filter([
             'to' => $this->primeiroEndereco($email->getTo()),
             'to_name' => $this->primeiroNome($email->getTo()),
@@ -93,8 +95,8 @@ final class WiseDataMailTransport extends AbstractTransport
              */
             'from' => $this->useAccountSender ? null : $this->primeiroEndereco($email->getFrom()),
             'reply_to' => $this->primeiroEndereco($email->getReplyTo()),
-            'message_type' => $this->tipo($email),
-            'headers' => $this->cabecalhosExtras($email),
+            'message_type' => $tipo,
+            'headers' => $this->cabecalhosExtras($email, $tipo),
 
             /*
              * As `tags` e os `metadata` do `Envelope` do Laravel chegam como
@@ -266,9 +268,13 @@ final class WiseDataMailTransport extends AbstractTransport
      * envio. A API a recusa de qualquer forma; barrar aqui só evita gastar uma
      * ida de rede para descobrir isso.
      *
+     * Fora da família `X-`, só o cancelamento em um clique (`List-Unsubscribe` e
+     * `List-Unsubscribe-Post`) — e não no transacional declarado, em que a API o
+     * recusaria: o botão tiraria alguém de uma lista por causa de um recibo.
+     *
      * @return array<string, string>
      */
-    private function cabecalhosExtras(Email $email): array
+    private function cabecalhosExtras(Email $email, ?string $tipo): array
     {
         $extras = [];
 
@@ -280,6 +286,14 @@ final class WiseDataMailTransport extends AbstractTransport
 
             $nome = $cabecalho->getName();
             $minusculo = strtolower($nome);
+
+            if (SendRules::isListUnsubscribeHeader($minusculo)) {
+                if ($tipo !== 'transactional') {
+                    $extras[$nome] = $cabecalho->getBodyAsString();
+                }
+
+                continue;
+            }
 
             if (! str_starts_with($minusculo, 'x-') || str_starts_with($minusculo, SendRules::RESERVED_HEADER_PREFIX)) {
                 continue;

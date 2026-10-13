@@ -98,6 +98,32 @@ final class EmailsTest extends TestCase
         }
     }
 
+    /** O lote vai inteiro para a rota própria, e a resposta volta item a item, na ordem. */
+    public function test_o_lote_manda_as_mensagens_para_a_rota_do_lote(): void
+    {
+        $transporte = (new FakeTransport)->responde(200, ['data' => [
+            ['index' => 0, 'id' => 1, 'status' => 'pending', 'replayed' => false],
+            ['index' => 1, 'status' => 403, 'error' => ['error' => 'send_quota_exceeded']],
+        ]]);
+
+        $mensagens = [
+            ['to' => 'ana@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'idempotency_key' => 'convite-1'],
+            ['to' => 'bia@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'idempotency_key' => 'convite-2'],
+        ];
+
+        $resultados = $this->cliente($transporte)->emails()->sendBatch($mensagens);
+
+        $chamada = $transporte->ultima();
+
+        $this->assertSame('POST', $chamada['method']);
+        $this->assertSame('https://api.wisedatamail.com/v1/emails/batch', $chamada['url']);
+        $this->assertSame(['emails' => $mensagens], $chamada['body']);
+        $this->assertArrayNotHasKey('Idempotency-Key', $chamada['headers']);
+
+        $this->assertSame('pending', $resultados[0]['status'] ?? null);
+        $this->assertSame(['error' => 'send_quota_exceeded'], $resultados[1]['error'] ?? null);
+    }
+
     private function cliente(FakeTransport $transporte): Client
     {
         return new Client('wdm_abc_def', transport: $transporte, retries: 0);

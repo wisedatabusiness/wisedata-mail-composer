@@ -4,6 +4,25 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.5.0] - 2026-10-12
+
+### Adicionado
+
+- **Envio em lote**: `emails()->sendBatch([...])`, até 100 mensagens por
+  chamada (`POST /v1/emails/batch`). Cada item aceita os campos de `send()`,
+  menos anexo, e mais `idempotency_key`. A resposta traz o desfecho de cada
+  mensagem, na ordem, com `index`: aceita (`id`, `status`, `replayed`) ou
+  recusada (`status` HTTP e o corpo de `error`). Só a estrutura inválida e a
+  conta sem condição de enviar recusam o lote inteiro. A fake reconhece a rota.
+- **Cancelamento em um clique no marketing**: `List-Unsubscribe` e
+  `List-Unsubscribe-Post` passam a ser aceitos em `headers` quando a mensagem é
+  `marketing`, conferidos localmente (entradas `<https://...>`/`<mailto:...>`;
+  o Post só com `List-Unsubscribe=One-Click` e um `https` na lista). O transport
+  os encaminha do `Mailable`, menos no transacional declarado.
+- **`processed` no webhook**: `WebhookEvent::PROCESSED` e o evento Laravel
+  `WiseDataMailProcessed`. Só chega ao endpoint que o assinou no painel.
+- `sender_check_failed` na lista de `bounce_classification` do README.
+
 ## [1.4.1] - 2026-10-11
 
 ### Alterado
