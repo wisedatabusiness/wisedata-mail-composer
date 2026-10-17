@@ -4,6 +4,24 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.6.1] - 2026-10-17
+
+### Corrigido
+
+- `senders()->list()` deixa de mandar `page` e `per_page`: a API não pagina
+  remetentes (são dezenas por espaço) e devolve todos em `data`, sem `meta`.
+  Quem passava os dois argumentos não quebra — o PHP ignora o excedente.
+
+### Mudou no servidor (sem alteração no pacote)
+
+- `X-WiseData-Space` presente e vazio agora é `400 space_required`: antes caía
+  na conta do integrador, em silêncio. Confira a variável que monta o cabeçalho.
+- `external_id` do espaço diferencia maiúsculas (`aB3` e `Ab3` são clientes
+  diferentes) e aceita só `A-Z a-z 0-9 . _ : @ + = -`, começando por letra ou
+  dígito.
+- Sufixo público (`com.br`, `github.io`) é recusado como domínio; domínio
+  acentuado é aceito e convertido para punycode.
+
 ## [1.6.0] - 2026-10-16
 
 ### Adicionado

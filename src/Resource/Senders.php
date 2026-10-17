@@ -50,13 +50,16 @@ final class Senders
     }
 
     /**
-     * @return array<string, mixed> o corpo inteiro, com `data` e `meta`
+     * Todos os remetentes do espaço numa resposta só: são dezenas, e a API não
+     * pagina esta lista.
+     *
+     * @return array<string, mixed> o corpo inteiro, com `data`
      *
      * @throws ApiException
      */
-    public function list(int $page = 1, int $perPage = 25): array
+    public function list(): array
     {
-        return $this->client->request('GET', 'senders', ['page' => $page, 'per_page' => $perPage]);
+        return $this->client->request('GET', 'senders');
     }
 
     /**

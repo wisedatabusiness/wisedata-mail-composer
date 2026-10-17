@@ -201,8 +201,9 @@ final class PlatformResourcesTest extends TestCase
         $cliente->domains()->list();
         $this->assertSame('https://api.exemplo.test/v1/domains?page=1&per_page=25', $transporte->ultima()['url']);
 
+        /* A API não pagina remetentes: mandar `page` sugeriria que há uma página 2. */
         $cliente->senders()->list();
-        $this->assertSame('https://api.exemplo.test/v1/senders?page=1&per_page=25', $transporte->ultima()['url']);
+        $this->assertSame('https://api.exemplo.test/v1/senders', $transporte->ultima()['url']);
     }
 
     /** Evento de mensagem continua sem `domain`; o de domínio traz o retrato tipado. */
