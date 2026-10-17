@@ -126,11 +126,60 @@ outra, em silêncio.
 | nenhum (chave da conta principal) | a conta principal | **recusa** (`space_not_allowed`) |
 | um | esse espaço | só ele |
 | vários | **recusa** (`space_required`) | um dos marcados |
+| chave de plataforma | a conta principal | qualquer espaço da conta, inclusive os criados depois |
 
 **A chave sem espaço marcado não é chave-mestra.** Ela age só na conta
 principal; para alcançar um espaço, marque-o na chave (Configurações ›
 Integrações). Um espaço criado depois também não entra sozinho. Quem precisa da
-conta principal *e* de um espaço usa duas chaves.
+conta principal *e* de um espaço usa duas chaves — ou a chave de plataforma.
+
+### Seus clientes, cada um no seu espaço
+
+Para o produto que envia **em nome dos clientes dele**, cada um com o próprio
+domínio e o próprio remetente — como subcontas. Exige a **chave de
+plataforma**: o Dono a emite em Configurações › Integrações, marcando "Chave de
+plataforma". Ela não tem espaços marcados nem vale para homologação, e é a
+única que recebe os escopos `spaces.*`.
+
+```php
+// 1. O cliente do seu sistema vira um espaço. Repetir atualiza, não duplica.
+$espaco = $mail->spaces()->upsert(externalId: 'cliente_812', name: 'Avcom');
+
+// Guarde o slug que VOLTOU: é o valor do forSpace().
+$doCliente = $mail->forSpace($espaco['slug']);
+
+// 2. O domínio dele. Devolve os registros DNS para você mostrar ao cliente.
+$dominio = $doCliente->domains()->register('avcom.com.co');
+foreach ($dominio['records'] as $r) {
+    // $r['type'], $r['name'], $r['value'], $r['priority'], $r['status']
+}
+
+// 3. Quando o webhook avisar domain.verified, o remetente:
+$doCliente->senders()->upsert('encuestas@avcom.com.co', 'Avcom', label: 'Pesquisas');
+
+// 4. E o envio sai com o nome do cliente.
+$doCliente->emails()->send([
+    'to' => 'ana@exemplo.com',
+    'from' => 'encuestas@avcom.com.co',
+    'subject' => '¿Cómo fue su experiencia?',
+    'html' => '<p>...</p>',
+]);
+```
+
+- **O Mail confere o DNS sozinho** e avisa pelo webhook: `domain.verified`
+  (pronto), `domain.failed` (desistiu sem ficar pronto) e `domain.degraded`
+  (estava pronto e deixou de estar). Não consulte `find()` em laço.
+- **DMARC é obrigatório.** Sem um registro `_dmarc` (no próprio domínio, ou no
+  organizacional quando o envio é de um subdomínio) o domínio não fica pronto.
+- `domains()->verify()` é o botão "já publiquei": confere na hora e retoma a
+  conferência que tinha desistido. Um por minuto por domínio — antes disso,
+  `rate_limited` com `retryAfter()`.
+- O remetente da API **nunca vira o padrão** do espaço: informe o `from` no
+  envio. O domínio exato do endereço precisa estar cadastrado no espaço.
+- `spaces()` sai sempre pela conta (a API recusa o cabeçalho de espaço nessas
+  rotas), então dá para chamá-lo do mesmo `$mail` de sempre.
+- `spaces()->delete()` apaga o espaço com tudo o que é dele. Espaço com envio
+  suspenso não sai (`space_suspended`).
 
 ## Enviando e-mail
 
@@ -584,7 +633,14 @@ Os principais:
 | `template_not_found` | nenhum modelo ATIVO com a chave em `extra['template']` |
 | `unknown_variable` | o modelo não usa a variável; os aceitos vêm em `extra['accepted_variables']` |
 | `missing_variable` | o modelo usa `extra['variable']` e ela não foi enviada |
-| `rate_limited` | passou do limite de requisições; esperar e repetir |
+| `rate_limited` | passou do limite de requisições (ou o `verify()` antes do minuto); esperar `retryAfter()` segundos e repetir |
+| `provider_unavailable` | o provedor de envio pediu para esperar (503); repetir depois de `retryAfter()` segundos |
+| `plan_limit_reached` | o plano não comporta mais espaços ou domínios; `extra['feature']` e `extra['limit']` dizem qual |
+| `space_not_applicable` | rota de espaço chamada com `X-WiseData-Space` — o pacote não manda; aparece só em chamada crua |
+| `space_not_found` | nenhum espaço da conta com esse `external_id` |
+| `space_suspended` | o envio do espaço está suspenso; ele não pode ser excluído até o suporte resolver |
+| `domain_not_found` / `sender_not_found` | não existe neste espaço — um domínio de OUTRO espaço também responde assim |
+| `sender_domain_not_registered` | o domínio do `from_email` não está cadastrado no espaço; `domains()->register()` antes |
 | `validation_failed` | o corpo foi recusado na validação (422); os campos e as mensagens estão em `extra['errors']`. O caso mais comum é `from` que não é remetente verificado. A API devolve `error: validation_failed` junto com `message` e `errors`; com uma API antiga, que respondia sem `error`, o pacote dá o mesmo código |
 
 No mailer, tudo isso chega como `WiseDataMailTransportException`, que é uma
@@ -682,7 +738,21 @@ final class SuprimirEnderecoDevolvido implements ShouldQueue
 | `click` | `WiseDataMailClicked` |
 | `unsubscribe` | `WiseDataMailUnsubscribed` |
 | `resubscribe` | `WiseDataMailResubscribed` |
+| `domain.verified` | `WiseDataMailDomainVerified` — só se o endpoint o assinou |
+| `domain.failed` | `WiseDataMailDomainFailed` — idem |
+| `domain.degraded` | `WiseDataMailDomainDegraded` — idem |
 | qualquer outro | `WiseDataMailUnknownEvent` — um tipo novo da API não some |
+
+Nos de domínio, o retrato vem tipado em `$e->event->domain` (um
+`WiseData\Mail\Webhook\DomainStatus`) e o cliente em `$e->event->space`:
+
+```php
+public function handle(WiseDataMailDomainVerified $e): void
+{
+    Cliente::where('mail_space', $e->event->space)
+        ->update(['remetente_proprio_liberado' => $e->event->domain->readyToSend]);
+}
+```
 
 Todos ficam em `WiseData\Mail\Laravel\Events` e carregam `$event` (um
 `WiseData\Mail\Webhook\WebhookEvent`) e `$deliveryId`.
@@ -763,8 +833,9 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 | `id` | sempre; cresce, serve para deduplicar e perceber buraco |
 | `type` | sempre — ver a tabela abaixo |
 | `occurred_at` | sempre; ISO 8601 com fuso |
-| `email` | sempre |
-| `message_id` | sempre; o `id` devolvido no envio |
+| `email` | sempre, menos nos `domain.*` (`null`; no pacote, `''`) |
+| `message_id` | sempre, menos nos `domain.*`; o `id` devolvido no envio |
+| `domain` | só nos `domain.*`: `{domain, ready_to_send, verified_at, failed_records}` |
 | `campaign_id` | na campanha; `null` no transacional |
 | `message_type` | `marketing` ou `transactional` |
 | `url` | só em `click` |
@@ -787,6 +858,13 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 | `click` | clicado | `url`, `machine_open` |
 | `unsubscribe` | descadastrou pela página | — |
 | `resubscribe` | voltou a se cadastrar pela página | — |
+| `domain.verified` | o domínio de envio ficou pronto — **opcional** | `domain`, `space` |
+| `domain.failed` | a conferência automática desistiu sem o domínio ficar pronto — **opcional** | `domain` (`failed_records` diz o que falta) |
+| `domain.degraded` | estava pronto e deixou de estar, já confirmado — **opcional** | `domain` (`failed_records` diz o que sumiu) |
+
+Cada virada do domínio sai uma vez: duas conferências que veem a mesma
+mudança não geram dois eventos. O `domain.failed` só sai quando a conferência
+desiste por tempo, nunca por falha nossa.
 
 `processed` só chega ao endpoint que o **marcou** no painel: é um aviso por
 mensagem enviada, útil para medir o funil (aceito → entregue) e volume demais

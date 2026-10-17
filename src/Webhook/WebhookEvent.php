@@ -38,12 +38,28 @@ final class WebhookEvent
 
     public const RESUBSCRIBE = 'resubscribe';
 
+    /*
+     * Os de domínio falam do domínio de envio, não de uma mensagem: chegam sem
+     * `email`, sem `message_id` e com `domain` preenchido. Só chegam ao
+     * endpoint que os marcou.
+     */
+
+    /** O domínio ficou pronto: libere o remetente do cliente. */
+    public const DOMAIN_VERIFIED = 'domain.verified';
+
+    /** A conferência automática desistiu sem o domínio ficar pronto: peça ao cliente para conferir o DNS. */
+    public const DOMAIN_FAILED = 'domain.failed';
+
+    /** Estava pronto e deixou de estar (já confirmado): volte ao remetente próprio. */
+    public const DOMAIN_DEGRADED = 'domain.degraded';
+
     /**
      * @param  int  $messageId  o `id` devolvido no envio — é o que `SentMessage::getMessageId()` guarda
      * @param  array<string, mixed>  $raw
      * @param  list<string>  $tags  as `tags` do envio; vazia quando não houve
      * @param  array<string, string>  $metadata  os `metadata` do envio, valores sempre texto
      * @param  ?string  $subject  o assunto como saiu para a pessoa; `null` na campanha que não saiu e em mensagem anterior a 06/10/2026
+     * @param  ?DomainStatus  $domain  só nos eventos `domain.*`
      */
     public function __construct(
         public readonly int $id,
@@ -64,6 +80,7 @@ final class WebhookEvent
         public readonly array $tags = [],
         public readonly array $metadata = [],
         public readonly ?string $subject = null,
+        public readonly ?DomainStatus $domain = null,
     ) {}
 
     /**
@@ -98,7 +115,13 @@ final class WebhookEvent
             tags: self::textos($dados['tags'] ?? null),
             metadata: self::mapa($dados['metadata'] ?? null),
             subject: self::texto($dados['subject'] ?? null),
+            domain: DomainStatus::fromArray($dados['domain'] ?? null),
         );
+    }
+
+    public function isAboutDomain(): bool
+    {
+        return in_array($this->type, [self::DOMAIN_VERIFIED, self::DOMAIN_FAILED, self::DOMAIN_DEGRADED], true);
     }
 
     /**

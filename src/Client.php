@@ -12,7 +12,10 @@ use WiseData\Mail\Http\HeaderGuard;
 use WiseData\Mail\Http\Response;
 use WiseData\Mail\Resource\Catalog;
 use WiseData\Mail\Resource\Contacts;
+use WiseData\Mail\Resource\Domains;
 use WiseData\Mail\Resource\Emails;
+use WiseData\Mail\Resource\Senders;
+use WiseData\Mail\Resource\Spaces;
 
 /**
  * O cliente da API do WiseData Mail.
@@ -37,6 +40,9 @@ use WiseData\Mail\Resource\Emails;
  * A chave SEM espaço marcado é da conta principal e não alcança espaço
  * nenhum: com ela, `forSpace()` (ou `WISEDATA_MAIL_SPACE`) recebe 403
  * `space_not_allowed`.
+ *
+ * A exceção é a **chave de plataforma**: alcança todo espaço da conta,
+ * inclusive os criados depois dela por `spaces()->upsert()`.
  */
 final class Client
 {
@@ -44,7 +50,7 @@ final class Client
      * A única fonte da versão do pacote: vai no `User-Agent`, e o `VersionTest`
      * a confere contra o CHANGELOG e o CI contra a tag publicada.
      */
-    public const VERSION = '1.5.2';
+    public const VERSION = '1.6.0';
 
     private const URL_PADRAO = 'https://api.wisedatamail.com';
 
@@ -160,6 +166,22 @@ final class Client
     public function emails(): Emails
     {
         return new Emails($this);
+    }
+
+    /** Exige a chave de plataforma. Sai sempre pela conta, mesmo deste cliente com `forSpace()`. */
+    public function spaces(): Spaces
+    {
+        return new Spaces($this);
+    }
+
+    public function domains(): Domains
+    {
+        return new Domains($this);
+    }
+
+    public function senders(): Senders
+    {
+        return new Senders($this);
     }
 
     /**

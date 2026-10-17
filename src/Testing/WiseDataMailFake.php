@@ -48,6 +48,12 @@ final class WiseDataMailFake implements Transport
             return $this->lote($body ?? []);
         }
 
+        $cadastro = $this->cadastro($method, $url, $body ?? []);
+
+        if ($cadastro !== null) {
+            return $cadastro;
+        }
+
         if (! $this->isEmailSend($method, $url)) {
             return new Response(200, ['data' => []]);
         }
@@ -107,6 +113,108 @@ final class WiseDataMailFake implements Transport
             'status' => 'pending',
             'provider_message_id' => null,
         ];
+    }
+
+    /**
+     * O `PUT` de espaço, domínio e remetente, respondido no formato da API.
+     *
+     * Sem isto, `spaces()->upsert()` devolveria `[]` e o código que lê o `slug`
+     * para chamar `forSpace()` quebraria só no teste — ou, pior, passaria com
+     * um `forSpace('')` que em produção é a conta principal.
+     *
+     * O `slug` da fake é o próprio `external_id`; o da API é gerado a partir
+     * do nome. Guarde o que vier na resposta, nunca o que você mandou.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function cadastro(string $method, string $url, array $body): ?Response
+    {
+        $recurso = strtoupper($method) === 'PUT' ? $this->recursoDe($url) : null;
+
+        return match ($recurso) {
+            'spaces' => new Response(201, ['data' => [
+                'external_id' => $body['external_id'] ?? null,
+                'slug' => $body['external_id'] ?? null,
+                'name' => $body['name'] ?? null,
+                'send_limit' => $body['send_limit'] ?? null,
+                'used' => 0,
+                'created_at' => null,
+            ]]),
+            'domains' => new Response(201, ['data' => [
+                'domain' => $body['domain'] ?? null,
+                'ready_to_send' => false,
+                'verified_at' => null,
+                'last_checked_at' => null,
+                'checking' => true,
+                'failed_records' => ['ownership', 'dkim', 'mail_from', 'tracking', 'dmarc'],
+                'records' => [],
+            ]]),
+            'senders' => new Response(201, ['data' => [
+                'from_email' => $body['from_email'] ?? null,
+                'from_name' => $body['from_name'] ?? null,
+                'reply_to' => $body['reply_to'] ?? null,
+                'label' => $body['label'] ?? null,
+                'verified' => false,
+                'verified_at' => null,
+            ]]),
+            default => null,
+        };
+    }
+
+    private function recursoDe(string $url): ?string
+    {
+        $caminho = rtrim((string) parse_url($url, PHP_URL_PATH), '/');
+
+        foreach (['spaces', 'domains', 'senders'] as $recurso) {
+            if (str_ends_with($caminho, "/v1/{$recurso}")) {
+                return $recurso;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * O espaço foi criado (ou atualizado) com este `external_id`.
+     */
+    public function assertSpaceUpserted(string $externalId): void
+    {
+        Assert::assertNotEmpty(
+            $this->cadastros('spaces', 'external_id', $externalId),
+            "Nenhum espaço com external_id {$externalId} foi gravado pelo WiseData Mail.",
+        );
+    }
+
+    /**
+     * O domínio foi cadastrado — e, com `$space`, no espaço certo. Cadastrar
+     * o domínio do cliente na conta principal é o erro que este parâmetro pega.
+     */
+    public function assertDomainRegistered(string $domain, ?string $space = null): void
+    {
+        Assert::assertNotEmpty(
+            $this->cadastros('domains', 'domain', $domain, $space),
+            "O domínio {$domain} não foi cadastrado".($space === null ? '' : " no espaço {$space}").' pelo WiseData Mail.',
+        );
+    }
+
+    public function assertSenderUpserted(string $fromEmail, ?string $space = null): void
+    {
+        Assert::assertNotEmpty(
+            $this->cadastros('senders', 'from_email', $fromEmail, $space),
+            "O remetente {$fromEmail} não foi gravado".($space === null ? '' : " no espaço {$space}").' pelo WiseData Mail.',
+        );
+    }
+
+    /**
+     * @return list<array{method: string, url: string, headers: array<string, string>, body: ?array<string, mixed>}>
+     */
+    private function cadastros(string $recurso, string $campo, string $valor, ?string $space = null): array
+    {
+        return array_values(array_filter($this->requests, fn (array $chamada): bool => strtoupper($chamada['method']) === 'PUT'
+            && $this->recursoDe($chamada['url']) === $recurso
+            && is_string($chamada['body'][$campo] ?? null)
+            && strcasecmp($chamada['body'][$campo], $valor) === 0
+            && ($space === null || ($chamada['headers']['X-WiseData-Space'] ?? null) === $space)));
     }
 
     /**

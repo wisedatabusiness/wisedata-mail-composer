@@ -37,6 +37,9 @@ abstract class WiseDataMailEvent
             WebhookEvent::CLICK => WiseDataMailClicked::class,
             WebhookEvent::UNSUBSCRIBE => WiseDataMailUnsubscribed::class,
             WebhookEvent::RESUBSCRIBE => WiseDataMailResubscribed::class,
+            WebhookEvent::DOMAIN_VERIFIED => WiseDataMailDomainVerified::class,
+            WebhookEvent::DOMAIN_FAILED => WiseDataMailDomainFailed::class,
+            WebhookEvent::DOMAIN_DEGRADED => WiseDataMailDomainDegraded::class,
             default => WiseDataMailUnknownEvent::class,
         };
 

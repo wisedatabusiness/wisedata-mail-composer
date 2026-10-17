@@ -11,13 +11,19 @@ use WiseData\Mail\Client;
 use WiseData\Mail\Contracts\Transport;
 use WiseData\Mail\Resource\Catalog;
 use WiseData\Mail\Resource\Contacts;
+use WiseData\Mail\Resource\Domains;
 use WiseData\Mail\Resource\Emails;
+use WiseData\Mail\Resource\Senders;
+use WiseData\Mail\Resource\Spaces;
 use WiseData\Mail\Testing\WiseDataMailFake;
 
 /**
  * @method static Contacts contacts()
  * @method static Catalog catalog()
  * @method static Emails emails()
+ * @method static Spaces spaces()
+ * @method static Domains domains()
+ * @method static Senders senders()
  * @method static Client forSpace(?string $space)
  *
  * @see Client

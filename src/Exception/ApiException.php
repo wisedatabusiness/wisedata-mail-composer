@@ -69,4 +69,15 @@ class ApiException extends WiseDataMailException
 
         return is_string($escopo) ? $escopo : null;
     }
+
+    /**
+     * Quantos segundos esperar antes de repetir: `provider_unavailable` (503)
+     * e `rate_limited` (429). `null` quando a API não pediu espera.
+     */
+    public function retryAfter(): ?int
+    {
+        $segundos = $this->extra['retry_after'] ?? null;
+
+        return is_int($segundos) ? $segundos : null;
+    }
 }

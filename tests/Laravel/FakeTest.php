@@ -163,6 +163,34 @@ final class FakeTest extends TestCase
         $fake->assertSent(static fn (array $corpo): bool => ! array_key_exists('from', $corpo));
     }
 
+    /**
+     * O fluxo de cadastro do cliente roda inteiro contra a fake: o `slug` da
+     * resposta alimenta o `forSpace()`, e a asserção confere que o domínio foi
+     * para o espaço do cliente — não para a conta.
+     */
+    public function test_a_fake_responde_o_cadastro_do_cliente_e_confere_o_espaco(): void
+    {
+        $fake = WiseDataMail::fake();
+
+        $espaco = WiseDataMail::spaces()->upsert('cliente_812', 'Avcom');
+        $this->assertIsString($espaco['slug']);
+
+        $doCliente = WiseDataMail::forSpace($espaco['slug']);
+        $dominio = $doCliente->domains()->register('avcom.com.co');
+        $doCliente->senders()->upsert('encuestas@avcom.com.co', 'Avcom', 'Pesquisas');
+
+        $this->assertFalse($dominio['ready_to_send']);
+        $this->assertContains('dmarc', $dominio['failed_records']);
+
+        $fake->assertSpaceUpserted('cliente_812');
+        $fake->assertDomainRegistered('avcom.com.co', space: 'cliente_812');
+        $fake->assertSenderUpserted('encuestas@avcom.com.co', space: 'cliente_812');
+        $fake->assertNothingSent();
+
+        $this->expectException(AssertionFailedError::class);
+        $fake->assertDomainRegistered('avcom.com.co', space: 'outro-cliente');
+    }
+
     /** O ponto de injeção: a aplicação troca o transporte com um `bind`. */
     public function test_a_aplicacao_troca_o_transporte_pelo_conteiner(): void
     {

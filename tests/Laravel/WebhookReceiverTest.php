@@ -9,6 +9,8 @@ use Illuminate\Testing\TestResponse;
 use RuntimeException;
 use WiseData\Mail\Laravel\Events\WiseDataMailBounced;
 use WiseData\Mail\Laravel\Events\WiseDataMailDelivered;
+use WiseData\Mail\Laravel\Events\WiseDataMailDomainDegraded;
+use WiseData\Mail\Laravel\Events\WiseDataMailDomainVerified;
 use WiseData\Mail\Laravel\Events\WiseDataMailProcessed;
 use WiseData\Mail\Laravel\Events\WiseDataMailUnknownEvent;
 use WiseData\Mail\Webhook\WebhookSignature;
@@ -53,6 +55,40 @@ final class WebhookReceiverTest extends TestCase
         $this->entregar([$this->evento(1, 'processed')])->assertNoContent();
 
         Event::assertDispatched(WiseDataMailProcessed::class);
+        Event::assertNotDispatched(WiseDataMailUnknownEvent::class);
+    }
+
+    /**
+     * O evento de domínio chega sem `email` e sem mensagem: o listener lê o
+     * espaço e o retrato do domínio, e precisa da classe própria para o
+     * `domain.verified` não cair no "desconhecido".
+     */
+    public function test_evento_de_dominio_vira_a_classe_propria_com_o_retrato(): void
+    {
+        Event::fake([WiseDataMailDomainVerified::class, WiseDataMailDomainDegraded::class, WiseDataMailUnknownEvent::class]);
+
+        $this->entregar([
+            [
+                'id' => 10, 'type' => 'domain.verified', 'occurred_at' => '2026-10-16T10:00:00-03:00',
+                'email' => null, 'message_id' => null, 'campaign_id' => null, 'message_type' => null,
+                'url' => null, 'reason' => null, 'bounce_classification' => null,
+                'machine_open' => false, 'is_test' => false, 'space' => 'avcom-k3m9qz',
+                'domain' => ['domain' => 'avcom.com.co', 'ready_to_send' => true, 'verified_at' => '2026-10-16T10:00:00-03:00', 'failed_records' => []],
+            ],
+            [
+                'id' => 11, 'type' => 'domain.degraded', 'occurred_at' => '2026-10-16T11:00:00-03:00',
+                'email' => null, 'space' => 'avcom-k3m9qz',
+                'domain' => ['domain' => 'avcom.com.co', 'ready_to_send' => false, 'verified_at' => null, 'failed_records' => ['dmarc']],
+            ],
+        ])->assertNoContent();
+
+        Event::assertDispatched(WiseDataMailDomainVerified::class, static fn (WiseDataMailDomainVerified $e): bool => $e->event->space === 'avcom-k3m9qz'
+            && $e->event->email === ''
+            && $e->event->isAboutDomain()
+            && $e->event->domain?->domain === 'avcom.com.co'
+            && $e->event->domain->readyToSend);
+        Event::assertDispatched(WiseDataMailDomainDegraded::class, static fn (WiseDataMailDomainDegraded $e): bool => $e->event->domain?->failedRecords === ['dmarc']
+            && ! $e->event->domain->readyToSend);
         Event::assertNotDispatched(WiseDataMailUnknownEvent::class);
     }
 

@@ -4,6 +4,43 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.6.0] - 2026-10-16
+
+### Adicionado
+
+- **Seus clientes, cada um no seu espaço** — para o produto que envia em nome
+  dos clientes dele, com a **chave de plataforma** (emitida pelo Dono em
+  Configurações › Integrações; alcança todo espaço da conta, inclusive os
+  criados depois):
+  - `spaces()->upsert($externalId, $name, $sendLimit)`, `find()`, `list()`,
+    `delete()`. A identidade é o id do cliente no seu sistema; repetir a
+    chamada atualiza em vez de duplicar. Sai sempre pela conta, mesmo de um
+    cliente com `forSpace()`.
+  - `domains()->register()`, `find()`, `list()`, `verify()`, `delete()` — no
+    espaço do `forSpace()`. `register()` devolve os registros DNS a publicar.
+  - `senders()->upsert($fromEmail, $fromName, $label, $replyTo)`, `find()`,
+    `list()`, `delete()`. O domínio exato do endereço precisa estar cadastrado
+    no espaço; o remetente da API nunca vira o padrão.
+- **Eventos de domínio no webhook**: `domain.verified`, `domain.failed` e
+  `domain.degraded`, com as constantes em `WebhookEvent`, o retrato tipado em
+  `$event->domain` (`DomainStatus`: `domain`, `readyToSend`, `verifiedAt`,
+  `failedRecords`), `isAboutDomain()` e os eventos Laravel
+  `WiseDataMailDomainVerified`, `WiseDataMailDomainFailed` e
+  `WiseDataMailDomainDegraded`. Opcionais: só chegam ao endpoint que os marcou.
+  Chegam sem `email` (`''`) e com `space` preenchido.
+- `ApiException::retryAfter()`: os segundos de espera de `rate_limited` (o
+  `verify()` aceita um por minuto por domínio) e de `provider_unavailable`.
+- A fake responde ao `PUT` de espaço, domínio e remetente no formato da API, e
+  ganha `assertSpaceUpserted()`, `assertDomainRegistered($domain, space:)` e
+  `assertSenderUpserted($fromEmail, space:)`. O `slug` da fake é o próprio
+  `external_id`.
+
+### Alterado
+
+- O domínio só fica pronto com **DMARC** publicado (no próprio domínio ou no
+  organizacional, quando o envio é de um subdomínio). Vale para a API e para o
+  painel.
+
 ## [1.5.2] - 2026-10-12
 
 ### Alterado
