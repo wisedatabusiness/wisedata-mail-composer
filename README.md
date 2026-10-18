@@ -378,7 +378,30 @@ Remetentes*); se não for, a API recusa com `422` e nada sai. Um endereço não
 verificado sairia sem DKIM alinhado, e o provedor de quem recebe trataria como
 falsificação.
 
-O **nome** exibido não viaja: é o do cadastro do remetente no WiseData Mail.
+O **nome** exibido vai junto — o `MAIL_FROM_NAME`, ou o nome do `from()` do
+`Mailable` — e vence o do cadastro do remetente no WiseData Mail. Sem nome no
+`from()`, sai o do cadastro. Nome com `@`, URL ou domínio
+(`MAIL_FROM_NAME="app.exemplo.com"`) a API recusaria: o mailer o deixa de fora,
+sai o do cadastro, e a mensagem não é recusada.
+
+Fora do Laravel, ou para trocar o nome por mensagem, `from_name` no corpo:
+
+```php
+// O mesmo endereço verificado, um nome por cliente.
+$mail->emails()->send([
+    'to' => 'ana@exemplo.com',
+    'from' => 'no-reply@seuproduto.com',
+    'from_name' => 'Avcom',
+    'reply_to' => 'contato@avcom.com.co',
+    'subject' => 'Sua opinião',
+    'html' => '<p>...</p>',
+]);
+```
+
+Até 70 caracteres, texto puro: `@`, URL, domínio e quebra de linha voltam
+`validation_failed`, porque o nome não passa por verificação e não pode se
+passar por outro remetente. Vale também com `template` e em cada item de
+`sendBatch()`.
 
 Duas saídas quando o `MAIL_FROM_ADDRESS` da aplicação não é (ou não pode ser)
 um remetente verificado:
@@ -842,6 +865,7 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 | `reason` | em `bounce`, `suppressed`, `dropped`, `rendering_failure` e `spamreport` |
 | `bounce_classification` | em `bounce`, `suppressed`, `dropped` e `rendering_failure` |
 | `machine_open` | em `open` e `click`: `true` quando foi máquina (pré-carregamento, antivírus, verificador de links); `false` nos demais |
+| `ip`, `user_agent` | só em `open` e `click` (no pacote, `$ip` e `$userAgent`); na abertura pelo Gmail, os do proxy de imagens do Google. Dado pessoal de quem recebeu |
 | `space` | slug do espaço de envio; `null` na conta principal |
 | `is_test` | `true` quando o desfecho foi simulado na caixa de homologação |
 
@@ -854,8 +878,8 @@ O ping do botão *Testar* é `{"test": true, "events": [], "sent_at": "..."}`.
 | `suppressed` | não saiu: o endereço está na supressão | `reason`, `bounce_classification` |
 | `rendering_failure` | não foi possível montar a mensagem | `reason`, `bounce_classification: render_failure` |
 | `spamreport` | marcado como spam | `reason` |
-| `open` | aberto | `machine_open` |
-| `click` | clicado | `url`, `machine_open` |
+| `open` | aberto | `machine_open`, `ip`, `user_agent` |
+| `click` | clicado | `url`, `machine_open`, `ip`, `user_agent` |
 | `unsubscribe` | descadastrou pela página | — |
 | `resubscribe` | voltou a se cadastrar pela página | — |
 | `domain.verified` | o domínio de envio ficou pronto — **opcional** | `domain`, `space` |

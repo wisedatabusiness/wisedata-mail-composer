@@ -347,9 +347,9 @@ final class WiseDataMailTransportTest extends TestCase
     /**
      * O remetente, como a API decide (`SendEmailRequest` + `SenderResolver`):
      * `from` presente precisa ser remetente verificado; ausente, sai o padrão
-     * da conta. O nome exibido nunca viaja — é o do cadastro do remetente.
+     * da conta. O nome do `from()` vai junto e vence o do cadastro.
      */
-    public function test_o_from_da_mensagem_vai_so_com_o_endereco(): void
+    public function test_o_from_da_mensagem_vai_com_endereco_e_nome(): void
     {
         $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
 
@@ -358,16 +358,42 @@ final class WiseDataMailTransportTest extends TestCase
         $corpo = $http->ultima()['body'];
 
         $this->assertSame('sistema@exemplo.com', $corpo['from'] ?? null);
+        $this->assertSame('Sistema', $corpo['from_name'] ?? null);
+    }
+
+    public function test_from_sem_nome_nao_manda_from_name(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http)->send($this->email()->from('sistema@exemplo.com'));
+
+        $this->assertArrayNotHasKey('from_name', $http->ultima()['body']);
+    }
+
+    /**
+     * Até a 1.6 o nome nunca viajava: um `MAIL_FROM_NAME` com cara de domínio,
+     * que funcionava, não pode passar a derrubar o envio numa versão menor.
+     */
+    public function test_nome_que_a_api_recusaria_fica_de_fora_e_a_mensagem_sai(): void
+    {
+        $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
+
+        $this->transport($http)->send($this->email()->from(new Address('sistema@exemplo.com', 'app.exemplo.com')));
+
+        $corpo = $http->ultima()['body'];
+
+        $this->assertSame('sistema@exemplo.com', $corpo['from'] ?? null);
         $this->assertArrayNotHasKey('from_name', $corpo);
     }
 
-    public function test_com_o_remetente_da_conta_o_from_nao_vai(): void
+    public function test_com_o_remetente_da_conta_nem_o_from_nem_o_nome_vao(): void
     {
         $http = (new FakeTransport)->responde(202, ['data' => ['id' => 1]]);
 
         $this->transport($http, useAccountSender: true)->send($this->email());
 
         $this->assertArrayNotHasKey('from', $http->ultima()['body']);
+        $this->assertArrayNotHasKey('from_name', $http->ultima()['body']);
     }
 
     /* ------------------------------------------------------------------ */

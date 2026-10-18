@@ -60,6 +60,8 @@ final class WebhookEvent
      * @param  array<string, string>  $metadata  os `metadata` do envio, valores sempre texto
      * @param  ?string  $subject  o assunto como saiu para a pessoa; `null` na campanha que não saiu e em mensagem anterior a 06/10/2026
      * @param  ?DomainStatus  $domain  só nos eventos `domain.*`
+     * @param  ?string  $ip  só em `open` e `click`; na abertura pelo Gmail, o do proxy de imagens do Google
+     * @param  ?string  $userAgent  só em `open` e `click`
      */
     public function __construct(
         public readonly int $id,
@@ -81,6 +83,8 @@ final class WebhookEvent
         public readonly array $metadata = [],
         public readonly ?string $subject = null,
         public readonly ?DomainStatus $domain = null,
+        public readonly ?string $ip = null,
+        public readonly ?string $userAgent = null,
     ) {}
 
     /**
@@ -116,6 +120,8 @@ final class WebhookEvent
             metadata: self::mapa($dados['metadata'] ?? null),
             subject: self::texto($dados['subject'] ?? null),
             domain: DomainStatus::fromArray($dados['domain'] ?? null),
+            ip: self::texto($dados['ip'] ?? null),
+            userAgent: self::texto($dados['user_agent'] ?? null),
         );
     }
 

@@ -4,6 +4,29 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.7.0] - 2026-10-18
+
+### Adicionado
+
+- **`from_name` por mensagem** em `emails()->send()` e em cada item de
+  `sendBatch()`: o nome de exibição vence o do cadastro do remetente, e o
+  endereço continua o do `from` verificado. Serve a quem envia do mesmo
+  endereço em nome de vários clientes (`no-reply@` como "Avcom" numa mensagem e
+  "Loja X" na outra). Até 70 caracteres; `@`, URL, domínio e quebra de linha
+  são recusados com `validation_failed` — no lote e na fake, antes da rede.
+- `WebhookEvent::$ip` e `$userAgent`: preenchidos em `open` e `click`, `null`
+  nos demais e em API anterior.
+
+### Mudou
+
+- **O mailer do Laravel passa a mandar o nome do `from()`** (no Laravel, o
+  `MAIL_FROM_NAME` ou o `from()` do `Mailable`). Até a 1.6 o nome nunca
+  viajava e saía o do cadastro no WiseData Mail; agora sai o da aplicação.
+  Confira o `MAIL_FROM_NAME`: o padrão do Laravel é o `APP_NAME`.
+  - Com `use_account_sender`, nada muda: nem o endereço nem o nome vão.
+  - Nome que a API recusaria (`MAIL_FROM_NAME="app.exemplo.com"`) fica de
+    fora e sai o do cadastro — a mensagem não é recusada.
+
 ## [1.6.1] - 2026-10-17
 
 ### Corrigido

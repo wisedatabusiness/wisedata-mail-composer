@@ -42,6 +42,22 @@ final class WebhookPayloadTest extends TestCase
         $this->assertSame('Suas contas vencem amanhã', $evento->subject);
     }
 
+    public function test_abertura_traz_ip_e_user_agent_e_api_antiga_le_nulo(): void
+    {
+        $payload = WebhookPayload::parse((string) json_encode([
+            'events' => [
+                ['id' => 1, 'type' => 'open', 'ip' => '203.0.113.9', 'user_agent' => 'Mozilla/5.0'],
+                ['id' => 2, 'type' => 'delivered', 'ip' => null, 'user_agent' => null],
+                ['id' => 3, 'type' => 'click'],
+            ],
+        ]));
+
+        $this->assertSame('203.0.113.9', $payload->events[0]->ip);
+        $this->assertSame('Mozilla/5.0', $payload->events[0]->userAgent);
+        $this->assertNull($payload->events[1]->ip);
+        $this->assertNull($payload->events[2]->userAgent);
+    }
+
     /** API anterior à 1.3.0, ou mensagem anterior à coluna: sem assunto é `null`, não erro. */
     public function test_sem_assunto_o_evento_le_nulo(): void
     {

@@ -58,6 +58,11 @@ final class SendRules
     /** O teto do `POST /v1/emails/batch`. */
     public const MAX_BATCH = 100;
 
+    public const MAX_FROM_NAME_LENGTH = 70;
+
+    /** Espelho da `SenderDisplayNameRule` da API: `@`, esquema, `www.` ou nome com cara de domínio. */
+    private const NOME_COM_CARA_DE_ENDERECO = '/@|:\/\/|\bwww\.|\b[a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b/i';
+
     public static function isListUnsubscribeHeader(string $nome): bool
     {
         return in_array(strtolower(trim($nome)), ['list-unsubscribe', 'list-unsubscribe-post'], true);
@@ -75,7 +80,10 @@ final class SendRules
      */
     public static function violations(array $payload): array
     {
+        $nome = self::fromNameViolation($payload['from_name'] ?? null);
+
         return [
+            ...($nome === null ? [] : ['from_name' => [$nome]]),
             ...self::headers($payload['headers'] ?? null),
             ...self::listUnsubscribe($payload['headers'] ?? null, $payload['message_type'] ?? null),
             ...self::tags($payload['tags'] ?? null),
@@ -196,6 +204,29 @@ final class SendRules
         }
 
         return $enderecos === [] ? null : $enderecos;
+    }
+
+    /**
+     * O nome de exibição da mensagem. O endereço é verificado; o nome, não — por
+     * isso ele não pode trazer o que o leitor confunde com outro remetente.
+     *
+     * `null` quando passa, inclusive ausente.
+     */
+    public static function fromNameViolation(mixed $nome): ?string
+    {
+        if ($nome === null || $nome === '') {
+            return null;
+        }
+
+        if (! is_string($nome) || mb_strlen($nome) > self::MAX_FROM_NAME_LENGTH || preg_match('/[\x00-\x1F\x7F]/', $nome) === 1) {
+            return 'O "from_name" é texto de até '.self::MAX_FROM_NAME_LENGTH.' caracteres, sem quebra de linha.';
+        }
+
+        if (preg_match(self::NOME_COM_CARA_DE_ENDERECO, $nome) === 1) {
+            return 'O "from_name" não pode conter e-mail, endereço de site ou domínio.';
+        }
+
+        return null;
     }
 
     /** `null` quando o nome passa. */

@@ -89,11 +89,8 @@ final class WiseDataMailTransport extends AbstractTransport
             'subject' => $email->getSubject(),
             'html' => $this->corpo($email->getHtmlBody()),
             'text' => $this->corpo($email->getTextBody()),
-            /*
-             * Só o endereço: o nome exibido é o do cadastro do remetente no
-             * WiseData Mail, e a API não aceita outro.
-             */
             'from' => $this->useAccountSender ? null : $this->primeiroEndereco($email->getFrom()),
+            'from_name' => $this->nomeDoRemetente($email),
             'reply_to' => $this->primeiroEndereco($email->getReplyTo()),
             'message_type' => $tipo,
             'headers' => $this->cabecalhosExtras($email, $tipo),
@@ -394,6 +391,27 @@ final class WiseDataMailTransport extends AbstractTransport
     private function primeiroEndereco(array $enderecos): ?string
     {
         return ($enderecos[0] ?? null)?->getAddress();
+    }
+
+    /**
+     * O nome do `from()` da mensagem, que vence o do cadastro na API.
+     *
+     * Fica de fora em dois casos, e em nenhum deles a mensagem é recusada:
+     * - `use_account_sender`: quem pediu o remetente da conta pediu o dele
+     *   inteiro, e o `MAIL_FROM_NAME` de fábrica trocaria o nome de tudo.
+     * - nome que a API recusaria (`@`, domínio, URL): até a 1.6 o nome nunca
+     *   viajava, e um `MAIL_FROM_NAME="app.exemplo.com"` que funcionava não pode
+     *   passar a derrubar todo envio numa versão menor. Sai o nome do cadastro.
+     */
+    private function nomeDoRemetente(Email $email): ?string
+    {
+        if ($this->useAccountSender) {
+            return null;
+        }
+
+        $nome = $this->primeiroNome($email->getFrom());
+
+        return SendRules::fromNameViolation($nome) === null ? $nome : null;
     }
 
     /**

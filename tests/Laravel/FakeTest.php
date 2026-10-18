@@ -125,6 +125,41 @@ final class FakeTest extends TestCase
         $fake->assertSentCount(2);
     }
 
+    /** `from_name` por mensagem: a fake aceita o nome livre e recusa o que finge endereço, como a API. */
+    public function test_a_fake_aplica_a_regra_do_from_name_no_avulso_e_no_lote(): void
+    {
+        $fake = WiseDataMail::fake();
+
+        WiseDataMail::emails()->send(['to' => 'ana@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'from_name' => 'Avcom']);
+        WiseDataMail::emails()->sendBatch([
+            ['to' => 'bia@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'from_name' => 'Loja X'],
+        ]);
+
+        $fake->assertSentTo('ana@exemplo.com', static fn (array $corpo): bool => $corpo['from_name'] === 'Avcom');
+        $fake->assertSentTo('bia@exemplo.com', static fn (array $corpo): bool => $corpo['from_name'] === 'Loja X');
+
+        foreach (['suporte@banco.com.br', 'https://banco.test', 'Atendimento banco.com.br', "Avcom\r\nBcc: x", str_repeat('a', 71)] as $nome) {
+            try {
+                WiseDataMail::emails()->send(['to' => 'caio@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'from_name' => $nome]);
+                $this->fail("a fake aceitou o nome {$nome}");
+            } catch (ApiException $e) {
+                $this->assertSame('validation_failed', $e->error);
+                $this->assertArrayHasKey('from_name', (array) ($e->extra['errors'] ?? []));
+            }
+        }
+
+        try {
+            WiseDataMail::emails()->sendBatch([
+                ['to' => 'caio@exemplo.com', 'subject' => 'a', 'html' => '<p>a</p>', 'from_name' => 'falso@banco.test'],
+            ]);
+            $this->fail('a recusa do lote precisa chegar à aplicação');
+        } catch (ApiException $e) {
+            $this->assertArrayHasKey('emails.0.from_name', (array) ($e->extra['errors'] ?? []));
+        }
+
+        $fake->assertSentCount(2);
+    }
+
     public function test_fail_with_recusa_como_a_api_e_nao_conta_como_enviado(): void
     {
         $fake = WiseDataMail::fake()->failWith('send_quota_exceeded', 403);
