@@ -898,6 +898,9 @@ depois.
 
 Os valores de `bounce_classification`: `invalid_address`, `previously_bounced`,
 `on_account_suppression`, `on_tenant_suppression`, `failed_validation`,
+`mailbox_unavailable` (caixa desativada), `domain_not_found`,
+`blocked_by_policy` (filtro de spam ou lista de bloqueio do destino),
+`sender_auth_failed` (SPF, DKIM ou DMARC do remetente reprovados),
 `rejected_by_server`, `sender_check_failed` (o filtro de entrada do destino
 recusou; nenhum adianta repetir); `mailbox_full`,
 `delivery_timeout`, `temporary_failure` (adianta mais tarde);
