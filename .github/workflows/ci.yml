@@ -34,7 +34,7 @@ jobs:
     name: PHP ${{ matrix.php }} · Symfony ${{ matrix.symfony }} · Laravel ${{ matrix.laravel || 'nenhum' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -69,7 +69,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
