@@ -4,6 +4,22 @@ Formato de [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 [SemVer](https://semver.org/lang/pt-BR/). A primeira versão listada é sempre
 `Client::VERSION` — o `VersionTest` confere, e o CI confere a tag.
 
+## [1.7.2] - 2026-11-02
+
+### Corrigido
+
+- `Client::VERSION` acompanha a tag. A `v1.7.1` foi publicada com a
+  constante ainda em `1.7.0` e não passou no CI; use a `1.7.2`.
+
+## [1.7.1] - 2026-11-02
+
+### Documentação
+
+- Novos valores de `bounce_classification` no webhook: `mailbox_unavailable`,
+  `domain_not_found`, `blocked_by_policy` e `sender_auth_failed`. O WiseData
+  Mail passou a ler o diagnóstico SMTP do destino onde antes devolvia
+  `rejected_by_server`.
+
 ## [1.7.0] - 2026-10-18
 
 ### Adicionado
